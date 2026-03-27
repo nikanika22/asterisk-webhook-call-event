@@ -29,7 +29,7 @@ class WebhookLogModel extends BaseModel {
                 status: status,
                 http_status: httpStatus || null,
                 response_body: responseBody ? String(responseBody) : null,
-                send_at: status == 'send' ? new Date() : null,
+                sent_at: status == 'sent' ? new Date() : null,
             };
             await this.update(id, dataUpdate);
         }

@@ -176,8 +176,7 @@ asteriskService.on('queuemember', (data) => {
 // === CDR ===
 asteriskService.on('cdr', (data) => {
     if (state.arrDialState[data.uniqueid]) state.arrCompleteCall[data.uniqueid] = data;
-    const calltype = data.calltype || (data.src && data.src.length < 5 ? 'CdrIn' : 'CdrOut');
-    socketService.getIO() && socketService.getIO().sockets.emit(calltype, encodeDataToClient(data));
+    makeCallEventv2(data.event.toLowerCase(), data.uniqueid);
 });
 
 // === QueueSummary ===
@@ -281,7 +280,7 @@ asteriskService.on('dialend', (data) => {
     if (data.dialstatus == 'ANSWER') {
         state.arrDialState[data.uniqueid].status = 'answered';
         console.log('dialstatus:    ', state.arrDialState[data.uniqueid]);
-        sendPostRequestv2(state.arrDialState[data.uniqueid].status, data.uniqueid);
+        makeCallEventv2(state.arrDialState[data.uniqueid].status, data.uniqueid);
         backupState();
     } else if (data.dialstatus == 'NOANSWER') {
         state.arrDialState[data.uniqueid].status = 'noanswer';
@@ -296,7 +295,6 @@ asteriskService.on('dialend', (data) => {
         console.log('dialstatus:    ', state.arrDialState[data.uniqueid]);
         backupState();
     }
-    makeCallEventv2(data.dialstatus.toLowerCase(), data.uniqueid);
 });
 
 
@@ -329,6 +327,7 @@ asteriskService.on('hangup', (data) => {
     const uniqueid = data.uniqueid;
     if (state.arrDialState[uniqueid]) {
         state.arrDialState[uniqueid].status = 'hangup';
+        makeCallEventv2('hangup', data.uniqueid);
         console.log('hangup:   ', state.arrDialState[uniqueid]);
         delete state.arrDialState[uniqueid];
         if (fs.existsSync(Back_File_Path)) {
