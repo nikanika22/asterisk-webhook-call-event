@@ -6,7 +6,7 @@ const {
     getAMI
 } = require('../config/asterisk');
 const {
-    ami: amiConfig
+    AMI: amiConfig
 } = require('../env');
 
 class AMIEventBus extends EventEmitter { }
