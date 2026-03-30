@@ -1,5 +1,5 @@
 const AsteriskManager = require('asterisk-manager');
-const { ami: amiConfig } = require('../env');
+const { AMI: amiConfig } = require('../env');
 
 let amiInstance = null;
 
