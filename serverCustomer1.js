@@ -14,7 +14,6 @@ app.post('/', async (req, res) => {
         success: true
     });
 });
-
 app.use('/', route);
 
 app.listen(3001, () => {
