@@ -161,9 +161,15 @@ async function sendWebhook(url, params) {
         webhookLogModel.updateStatus(id, 'sent', res.status, responseData);
 
     }).catch(err => {
+        if (err.code === "ECONNREFUSED") {
+            const errCode = 500;
+            const errMessage = "Connection refused";
+            webhookLogModel.updateStatus(id, 'failed', errCode, errMessage);
+            return;
+        }
         console.log(`[Webhook] send fail: ${url}`);
-        const httpStatus = err.response ? err.response.status : null;
-        webhookLogModel.updateStatus(id, 'failed', httpStatus, err.message);
+        console.log('code', err.code);
+        webhookLogModel.updateStatus(id, 'failed', err.code, err.response.data);
     });
 }
 

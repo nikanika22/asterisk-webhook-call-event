@@ -1,6 +1,6 @@
 const fs = require('fs');
 const path = require('path');
-const Back_File_Path = path.join(__dirname, 'dial_statebackup.json');
+const Back_File_Path = path.join(__dirname, '../logs', 'dial_statebackup.json');
 const EventEmitter = require('events');
 const {
     getAMI
