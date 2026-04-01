@@ -14,6 +14,7 @@ class WebhookLogModel extends BaseModel {
                 payload: JSON.stringify(params),
                 status: 'pending',
                 attempt_count: 1,
+                created_at: new Date(),
             };
             const result = await this.create(dataToInsert);
             return result.insertId;
@@ -29,7 +30,8 @@ class WebhookLogModel extends BaseModel {
                 status: status,
                 http_status: httpStatus || null,
                 response_body: responseBody ? String(responseBody) : null,
-                sent_at: status == 'sent' ? new Date() : null,
+                sent_at: new Date(),
+                last_attempt_at: new Date()
             };
             await this.update(id, dataUpdate);
         }
