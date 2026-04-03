@@ -152,16 +152,48 @@ function sendPostRequestv2(url = '', params) {
 async function sendWebhook(url, params) {
     if (!url) return;
     const id = await webhookLogModel.logPending(params, url);
-    axios.post(url, params).then(res => {
-        console.log(`[Webhook] send sucess: ${res.data} `);
-        const responseData = typeof res.data === 'object' ? JSON.stringify(res.data) : res.data;
-        webhookLogModel.updateStatus(id, 'sent', res.status, responseData);
+    const MAX_RETRY = 3;
+    const DELAY_BETWEEN_RETRY = 1000;
+    for (let attempt = 1; attempt <= MAX_RETRY; attempt++) {
+        try {
+            const res = await axios.post(url, params);
+            console.log(`[Webhook] send success (attempt ${attempt}): ${url}`);
+            const responseData = typeof res.data === 'object' ? JSON.stringify(res.data) : res.data;
+            await webhookLogModel.updateStatus(id, 'sent', res.status, responseData, attempt);
+            return;
 
-    }).catch(err => {
-        console.log(`[Webhook] send fail: ${url}`);
-        const httpStatus = err.response ? err.response.status : null;
-        webhookLogModel.updateStatus(id, 'failed', httpStatus, err.message);
-    });
+        } catch (err) {
+
+            console.log(`[Webhook] Attempt ${attempt}/${MAX_RETRY} failed: ${url}`);
+            if (attempt < MAX_RETRY) {
+                await new Promise(resolve => setTimeout(resolve, DELAY_BETWEEN_RETRY));
+            } else {
+                if (err.code === "ECONNREFUSED") {
+                    await webhookLogModel.updateStatus(id, 'failed', 500, err.code, attempt);
+                    return;
+                }
+
+                if (err.response) {
+                    const errCode = err.response.status;
+                    let errorMessage;
+                    const data = err.response.data;
+                    if (!data) {
+                        errorMessage = `HTTP ${errCode}: ${err.response.statusText}`;
+                    } else if (typeof data === 'object') {
+                        errorMessage = JSON.stringify(data);
+                    } else if (typeof data === 'string' && data.includes('<html')) {
+                        errorMessage = `HTTP ${errCode}: ${err.response.statusText}`;
+                    } else {
+                        errorMessage = data;
+                    }
+
+                    await webhookLogModel.updateStatus(id, 'failed', errCode, errorMessage, attempt);
+                    return;
+                }
+                await webhookLogModel.updateStatus(id, 'failed', 500, err.message || 'Unknown error', attempt);
+            }
+        }
+    }
 }
 
 function _logHandler(url) {

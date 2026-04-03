@@ -6,3 +6,7 @@ back_state.json
 /logs/
 /data/
 /tmp/
+.agent/
+openspec/
+ .vscode/
+ .gitignore
