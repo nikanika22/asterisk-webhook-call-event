@@ -10,7 +10,7 @@ const {
     getTimeFormat
 } = require('../utils/dateHelper');
 const {
-    connectorServer
+    CONNECTOR_SERVER
 } = require('../env');
 
 const BLOCKED_URLS = [
@@ -26,7 +26,7 @@ const FALLBACK_URL = 'https://webhook-chrome.mipbx.vn/call';
  */
 function getWebhookInfo() {
     state.arrWebhook = {};
-    groupModel.getActiveWebhooks(connectorServer).then((rows) => {
+    groupModel.getActiveWebhooks(CONNECTOR_SERVER).then((rows) => {
         rows.forEach((item) => {
             const keyHookName = 'webhook-' + item.id;
             if (state.arrWebhook[keyHookName] || !item.hl_exts_queues) return;
@@ -102,7 +102,7 @@ function sendPostRequestv2(url = '', params) {
     //     return;
     // }
 
-    params.value.connector_server = connectorServer;
+    params.value.connector_server = CONNECTOR_SERVER;
 
     // if (['4700', '4701', '4702'].indexOf(params.value.extension) > -1) {
     //     if (params.event === 'answered') {
@@ -148,7 +148,10 @@ function sendPostRequestv2(url = '', params) {
         }
     }
 }
-// dang sử dụng ở đây
+
+
+
+// dang sử dụng ở đây, để lưu cơ sở dữ liệu lịch sử gửi event
 async function sendWebhook(url, params) {
     if (!url) return;
     const id = await webhookLogModel.logPending(params, url);
@@ -195,6 +198,9 @@ async function sendWebhook(url, params) {
         }
     }
 }
+
+
+
 
 function _logHandler(url) {
     return (err, res, body) => {

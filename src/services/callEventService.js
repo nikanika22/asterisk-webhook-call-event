@@ -99,10 +99,10 @@ function makeCallEventv2(type, callid) {
                 params.value.duration = state.arrCompleteCall[callid].duration;
                 params.value.billsec = state.arrCompleteCall[callid].billableseconds;
                 params.value.recording_file = '';
-                if (state.arrRecordingFile[callid]) {
-                    const recFile = state.arrRecordingFile[callid].recordingfile.substr(1);
-                    params.value.recording_file = data.recordingurl + 'cvf.php?f=' + encodeDataToBase(recFile);
-                }
+                // if (state.arrRecordingFile[callid]) {
+                //     const recFile = state.arrRecordingFile[callid].recordingfile.substr(1);
+                //     params.value.recording_file = data.recordingurl + 'cvf.php?f=' + encodeDataToBase(recFile);
+                // }
             } else {
                 params.event = 'misscall';
                 params.value.recording_file = '';
