@@ -9,3 +9,5 @@ back_state.json
 .agent/
 openspec/
  .vscode/
+ .gitignore
+ .vscode/

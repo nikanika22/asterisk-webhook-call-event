@@ -11,6 +11,9 @@ const {
 
 class AMIEventBus extends EventEmitter { }
 const asteriskService = new AMIEventBus();
+const INTERNAL_CONTEXTS = ['from-internal', 'from-extensions'];
+const OUTBOUND_CONTEXTS = ['trunk-dial-with-exten', 'from-internal-to-trunk'];
+const INBOUND_CONTEXTS = ['from-pstn', 'from-trunk', 'from-mas'];
 
 function backupState() {
     try {
@@ -225,19 +228,22 @@ asteriskService.on('chanspystop', (data) => {
 
 // === DialBegin ===
 asteriskService.on('dialbegin', (data) => {
-    console.log("[1]arrWebhook", state.arrWebhook);
     const channel = data.channel || '';
     const destchannel = data.destchannel || '';
     const calleridnum = data.calleridnum || '';
     const connectedlinenum = data.connectedlinenum || '';
     let calltype = '';
-    if (connectedlinenum.length < 5 && calleridnum.length < 5 && data.context) {
+
+    if (INTERNAL_CONTEXTS.includes(data.context) && INTERNAL_CONTEXTS.includes(data.destcontext)) {
         calltype = 'Internal';
-    } else if (connectedlinenum.length > 5 && calleridnum.length > 5 && data.context === "trunk-dial-with-exten") {
+    } else if (OUTBOUND_CONTEXTS.includes(data.context)) {
         calltype = 'Outbound';
-    } else {
+    } else if (INBOUND_CONTEXTS.includes(data.context)) {
         calltype = 'Inbound';
+    } else {
+        calltype = 'Unknown';
     }
+    const phoneNumber = calltype === 'Inbound' ? calleridnum : connectedlinenum;
     if ((channel.indexOf('SIP/') > -1 || channel.indexOf('LOCAL') > -1) &&
         (destchannel.indexOf('SIP/') > -1 || destchannel.indexOf('LOCAL') > -1)) {
         const ext = checkExtension(channel);
@@ -254,6 +260,7 @@ asteriskService.on('dialbegin', (data) => {
                 fromnumber: calleridnum,
                 tonumber: connectedlinenum,
                 extension: ext,
+                phoneNumber: phoneNumber,
                 calltype: calltype,
                 channel,
                 destchannel,

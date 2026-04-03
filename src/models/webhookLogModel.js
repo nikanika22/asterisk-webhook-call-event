@@ -13,8 +13,10 @@ class WebhookLogModel extends BaseModel {
                 webhook_url: url,
                 payload: JSON.stringify(params),
                 status: 'pending',
-                attempt_count: 1,
+                attempt_count: 0,
+                contact_number: params.value.phoneNumber,
                 created_at: new Date(),
+                sent_at: new Date(),
             };
             const result = await this.create(dataToInsert);
             return result.insertId;
@@ -23,20 +25,36 @@ class WebhookLogModel extends BaseModel {
             return null;
         }
     }
-    async updateStatus(id, status, httpStatus, responseBody) {
+    async updateStatus(id, status, httpStatus, responseBody, attempt) {
         if (!id) return;
         try {
             const dataUpdate = {
                 status: status,
                 http_status: httpStatus || null,
                 response_body: responseBody ? String(responseBody) : null,
-                sent_at: new Date(),
-                last_attempt_at: new Date()
+                last_attempt_at: new Date(),
+                attempt_count: attempt,
+
             };
             await this.update(id, dataUpdate);
         }
         catch (error) {
             console.error('[DB] Lỗi update status webhook:', error.message);
+        }
+    }
+
+    async updateRetriveStatus(id, status, httpStatus, responseBody) {
+        if (!id) return;
+        try {
+            await this.update(id, {
+                status: status,
+                http_status: httpStatus || null,
+                response_body: responseBody ? String(responseBody) : null,
+                retrive_status: status,
+                retrive_at: new Date(),
+            });
+        } catch (error) {
+            console.error('[DB] Lỗi update retrive status:', error.message);
         }
     }
 }

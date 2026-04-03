@@ -155,22 +155,48 @@ function sendPostRequestv2(url = '', params) {
 async function sendWebhook(url, params) {
     if (!url) return;
     const id = await webhookLogModel.logPending(params, url);
-    axios.post(url, params).then(res => {
-        console.log(`[Webhook] send sucess: ${res.data} `);
-        const responseData = typeof res.data === 'object' ? JSON.stringify(res.data) : res.data;
-        webhookLogModel.updateStatus(id, 'sent', res.status, responseData);
-
-    }).catch(err => {
-        if (err.code === "ECONNREFUSED") {
-            const errCode = 500;
-            const errMessage = "Connection refused";
-            webhookLogModel.updateStatus(id, 'failed', errCode, errMessage);
+    const MAX_RETRY = 3;
+    const DELAY_BETWEEN_RETRY = 1000;
+    for (let attempt = 1; attempt <= MAX_RETRY; attempt++) {
+        try {
+            const res = await axios.post(url, params);
+            console.log(`[Webhook] send success (attempt ${attempt}): ${url}`);
+            const responseData = typeof res.data === 'object' ? JSON.stringify(res.data) : res.data;
+            await webhookLogModel.updateStatus(id, 'sent', res.status, responseData, attempt);
             return;
+
+        } catch (err) {
+
+            console.log(`[Webhook] Attempt ${attempt}/${MAX_RETRY} failed: ${url}`);
+            if (attempt < MAX_RETRY) {
+                await new Promise(resolve => setTimeout(resolve, DELAY_BETWEEN_RETRY));
+            } else {
+                if (err.code === "ECONNREFUSED") {
+                    await webhookLogModel.updateStatus(id, 'failed', 500, err.code, attempt);
+                    return;
+                }
+
+                if (err.response) {
+                    const errCode = err.response.status;
+                    let errorMessage;
+                    const data = err.response.data;
+                    if (!data) {
+                        errorMessage = `HTTP ${errCode}: ${err.response.statusText}`;
+                    } else if (typeof data === 'object') {
+                        errorMessage = JSON.stringify(data);
+                    } else if (typeof data === 'string' && data.includes('<html')) {
+                        errorMessage = `HTTP ${errCode}: ${err.response.statusText}`;
+                    } else {
+                        errorMessage = data;
+                    }
+
+                    await webhookLogModel.updateStatus(id, 'failed', errCode, errorMessage, attempt);
+                    return;
+                }
+                await webhookLogModel.updateStatus(id, 'failed', 500, err.message || 'Unknown error', attempt);
+            }
         }
-        console.log(`[Webhook] send fail: ${url}`);
-        console.log('code', err.code);
-        webhookLogModel.updateStatus(id, 'failed', err.code, err.response.data);
-    });
+    }
 }
 
 
@@ -337,6 +363,56 @@ function genToken(options_clone) {
     });
 }
 
+async function retryWebhook(id) {
+    const log = await webhookLogModel.findById(id);
+    if (!log) {
+        return { success: false, error: { code: 'LOG_NOT_FOUND', message: 'Không tìm thấy webhook log' } };
+    }
+    if (log.status !== 'failed') {
+        return { success: false, error: { code: 'LOG_NOT_FAILED', message: 'Chỉ retry được log có status failed' } };
+    }
+    let params;
+    try {
+        params = typeof log.payload === 'string' ? JSON.parse(log.payload) : log.payload;
+    } catch {
+        return { success: false, error: { code: 'INVALID_PAYLOAD', message: 'Payload trong DB không hợp lệ' } };
+    }
+
+    const url = log.webhook_url;
+
+    try {
+        const res = await axios.post(url, params, { timeout: 2000 });
+        const responseData = typeof res.data === 'object' ? JSON.stringify(res.data) : res.data;
+        console.log(`[Webhook] Retry success id=${id}: ${url}`);
+        await webhookLogModel.updateRetriveStatus(id, 'sent', res.status, responseData);
+        return { success: true, http_status: res.status, response: responseData };
+    }
+    catch (err) {
+        const httpStatus = err.response?.status || 500;
+        let errorMessage;
+        const data = err.response?.data;
+        if (!data) {
+            errorMessage = `HTTP ${httpStatus}`;
+        } else if (typeof data === 'object') {
+            errorMessage = JSON.stringify(data);
+        } else if (typeof data === 'string' && data.includes('<html')) {
+            errorMessage = `HTTP ${httpStatus}`;
+        } else {
+            errorMessage = data;
+        }
+        if (err.code === "ECONNREFUSED") {
+            console.log(`[Webhook] Retry failed id=${id}: ${url} - ${err.code}`);
+            await webhookLogModel.updateRetriveStatus(id, 'failed', httpStatus, err.code);
+            return { success: false, error: { code: 'RETRY_FAILED', message: err.code, http_status: httpStatus } };
+        }
+        console.error(`[Webhook] Retry failed id=${id}: ${url} - ${errorMessage}`);
+        await webhookLogModel.updateRetriveStatus(id, 'failed', httpStatus, errorMessage);
+        return { success: false, error: { code: 'RETRY_FAILED', message: errorMessage, http_status: httpStatus } };
+    }
+}
+
+
+
 module.exports = {
     getWebhookInfo,
     checkPostRequest,
@@ -344,5 +420,6 @@ module.exports = {
     sendGetRequest,
     pushCallLog,
     makeCallError,
-    sendWebhook
-};
+    sendWebhook,
+    retryWebhook,
+}
