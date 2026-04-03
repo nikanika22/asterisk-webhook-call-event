@@ -115,7 +115,14 @@ function makeCallEventv2(type, callid) {
     const url = params.value.webhookurl;
     delete params.value.webhookurl;
     delete params.value.recordingurl;
-    webhookService.sendWebhook(url, params);
+    if (type === "cdr") {
+        setTimeout(() => {
+            webhookService.sendWebhook(url, params);
+        }, 2000);
+    }
+    else {
+        webhookService.sendWebhook(url, params);
+    }
 }
 module.exports = {
     makeCallEvent,

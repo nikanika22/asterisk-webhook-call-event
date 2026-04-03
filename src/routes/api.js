@@ -31,6 +31,7 @@ router.post('/removeBlacklist', blacklistController.removeBlacklist);
 
 // Webhook
 router.get('/restartWebhook', webhookController.restartWebhook);
+router.post('/webhook/retry', webhookController.retryWebhook);
 
 // PhoneBridge
 router.get('/updateConfigPhoneBridge', phoneBridgeController.updateConfigPhoneBridge);
