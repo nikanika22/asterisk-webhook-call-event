@@ -34,11 +34,27 @@ class WebhookLogModel extends BaseModel {
                 response_body: responseBody ? String(responseBody) : null,
                 last_attempt_at: new Date(),
                 attempt_count: attempt,
+
             };
             await this.update(id, dataUpdate);
         }
         catch (error) {
             console.error('[DB] Lỗi update status webhook:', error.message);
+        }
+    }
+
+    async updateRetriveStatus(id, status, httpStatus, responseBody) {
+        if (!id) return;
+        try {
+            await this.update(id, {
+                status: status,
+                http_status: httpStatus || null,
+                response_body: responseBody ? String(responseBody) : null,
+                retrive_status: status,
+                retrive_at: new Date(),
+            });
+        } catch (error) {
+            console.error('[DB] Lỗi update retrive status:', error.message);
         }
     }
 }

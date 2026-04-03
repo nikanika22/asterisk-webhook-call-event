@@ -357,6 +357,56 @@ function genToken(options_clone) {
     });
 }
 
+async function retryWebhook(id) {
+    const log = await webhookLogModel.findById(id);
+    if (!log) {
+        return { success: false, error: { code: 'LOG_NOT_FOUND', message: 'Không tìm thấy webhook log' } };
+    }
+    if (log.status !== 'failed') {
+        return { success: false, error: { code: 'LOG_NOT_FAILED', message: 'Chỉ retry được log có status failed' } };
+    }
+    let params;
+    try {
+        params = typeof log.payload === 'string' ? JSON.parse(log.payload) : log.payload;
+    } catch {
+        return { success: false, error: { code: 'INVALID_PAYLOAD', message: 'Payload trong DB không hợp lệ' } };
+    }
+
+    const url = log.webhook_url;
+
+    try {
+        const res = await axios.post(url, params, { timeout: 2000 });
+        const responseData = typeof res.data === 'object' ? JSON.stringify(res.data) : res.data;
+        console.log(`[Webhook] Retry success id=${id}: ${url}`);
+        await webhookLogModel.updateRetriveStatus(id, 'sent', res.status, responseData);
+        return { success: true, http_status: res.status, response: responseData };
+    }
+    catch (err) {
+        const httpStatus = err.response?.status || 500;
+        let errorMessage;
+        const data = err.response?.data;
+        if (!data) {
+            errorMessage = `HTTP ${httpStatus}`;
+        } else if (typeof data === 'object') {
+            errorMessage = JSON.stringify(data);
+        } else if (typeof data === 'string' && data.includes('<html')) {
+            errorMessage = `HTTP ${httpStatus}`;
+        } else {
+            errorMessage = data;
+        }
+        if (err.code === "ECONNREFUSED") {
+            console.log(`[Webhook] Retry failed id=${id}: ${url} - ${err.code}`);
+            await webhookLogModel.updateRetriveStatus(id, 'failed', httpStatus, err.code);
+            return { success: false, error: { code: 'RETRY_FAILED', message: err.code, http_status: httpStatus } };
+        }
+        console.error(`[Webhook] Retry failed id=${id}: ${url} - ${errorMessage}`);
+        await webhookLogModel.updateRetriveStatus(id, 'failed', httpStatus, errorMessage);
+        return { success: false, error: { code: 'RETRY_FAILED', message: errorMessage, http_status: httpStatus } };
+    }
+}
+
+
+
 module.exports = {
     getWebhookInfo,
     checkPostRequest,
@@ -364,5 +414,6 @@ module.exports = {
     sendGetRequest,
     pushCallLog,
     makeCallError,
-    sendWebhook
-};
+    sendWebhook,
+    retryWebhook,
+}
