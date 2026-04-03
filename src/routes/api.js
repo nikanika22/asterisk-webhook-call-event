@@ -37,4 +37,7 @@ router.post('/webhook/retry', webhookController.retryWebhook);
 router.get('/updateConfigPhoneBridge', phoneBridgeController.updateConfigPhoneBridge);
 router.get('/getZohoConfig', phoneBridgeController.getZohoConfig);
 
+//getAllLog
+router.get('/getAllWebhookLog', webhookController.getAllLog);
+
 module.exports = router;

@@ -411,7 +411,9 @@ async function retryWebhook(id) {
     }
 }
 
-
+async function getAllLog() {
+    return webhookLogModel.getAllLog();
+}
 
 module.exports = {
     getWebhookInfo,
@@ -422,4 +424,5 @@ module.exports = {
     makeCallError,
     sendWebhook,
     retryWebhook,
+    getAllLog
 }

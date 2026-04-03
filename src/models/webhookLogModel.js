@@ -57,6 +57,14 @@ class WebhookLogModel extends BaseModel {
             console.error('[DB] Lỗi update retrive status:', error.message);
         }
     }
+    async getAllLog() {
+        try {
+            return await this.findAll();
+        } catch (error) {
+            console.error('[DB] Lỗi get all log:', error.message);
+            return [];
+        }
+    }
 }
 
 module.exports = new WebhookLogModel();

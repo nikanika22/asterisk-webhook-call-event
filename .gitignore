@@ -8,6 +8,4 @@ back_state.json
 /tmp/
 .agent/
 openspec/
- .vscode/
- .gitignore
- .vscode/
+.vscode/    

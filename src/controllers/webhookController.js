@@ -39,4 +39,16 @@ async function retryWebhook(req, res) {
     }
 }
 
-module.exports = { restartWebhook, retryWebhook };
+async function getAllLog(req, res) {
+    try {
+        const result = await webhookService.getAllLog();
+        res.json({ success: true, data: result });
+    } catch (err) {
+        res.json({
+            success: false,
+            error: { code: 'GET_ALL_LOG_FAILED', message: err.message || 'Get all log failed', details: err }
+        });
+    }
+}
+
+module.exports = { restartWebhook, retryWebhook, getAllLog };
