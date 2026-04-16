@@ -7,13 +7,13 @@
 ## [PROJECT CONFIG] — Thay đổi phần này cho project của bạn
 
 ```
-Project Name  : [YourAppName]
-Tech Stack    : [e.g. Next.js 14 App Router + NestJS + PostgreSQL + Prisma]
+Project Name  : Asterisk Webhook Call Event
+Tech Stack    : NestJS + MariaDB
 Styling       : [e.g. Tailwind CSS v3]
 Testing       : [e.g. Vitest + Playwright]
 Auth          : [e.g. JWT + refresh token / NextAuth / Clerk]
 Deploy        : [e.g. Vercel (FE) + Railway (BE)]
-Team Size     : [solo / 2-5 / 5+]
+Team Size     : solo
 Environments  : dev | staging | production
 ```
 

@@ -8,4 +8,7 @@ back_state.json
 /tmp/
 .agent/
 openspec/
-.vscode/    
+.vscode/  
+AGENTS.md
+CHANGELOG.md
+/dist
