@@ -18,7 +18,9 @@ export function getExtension(channel: string): string {
 export function parseChannel(channel: string): string | null {
   if (typeof channel === 'undefined') return null;
   let checkExt: string | null = null;
-  if (channel.match('SIP/') != null) {
+  if (channel.match('PJSIP/') != null) {
+    checkExt = channel.substring(channel.lastIndexOf('PJSIP/') + 6, channel.lastIndexOf('-'));
+  } else if (channel.match('SIP/') != null) {
     checkExt = channel.substring(channel.lastIndexOf('SIP/') + 4, channel.lastIndexOf('-'));
   } else if (channel.match('Local/') != null) {
     checkExt = channel.substring(channel.lastIndexOf('Local/') + 6, channel.lastIndexOf('@'));

@@ -70,6 +70,10 @@ export class WebhookService implements OnApplicationBootstrap {
 
   async logPending(params: any, url: string) {
     try {
+      const contactNumber = params.value?.calltype === 'Inbound' 
+        ? params.value?.fromnumber 
+        : params.value?.tonumber;
+
       const dataToInsert = {
         call_uniqueid: params.value?.callrefid || null,
         call_refid: params.value?.callrefid || null,
@@ -78,7 +82,7 @@ export class WebhookService implements OnApplicationBootstrap {
         payload: JSON.stringify(params),
         status: 'pending',
         attempt_count: 0,
-        contact_number: params.value.phoneNumber || null,
+        contact_number: contactNumber || null,
         created_at: new Date(),
         sent_at: new Date(),
       };
@@ -353,9 +357,12 @@ export class WebhookService implements OnApplicationBootstrap {
           case 'extension':
             option.push(config[e].alias + '=' + (this.store.arrDialState[uniqueid] || {}).extension);
             break;
-          case 'phone':
-            option.push(config[e].alias + '=' + (this.store.arrDialState[uniqueid] || {}).phone);
+          case 'phone': {
+            const stateInfo = this.store.arrDialState[uniqueid] || {} as any;
+            const phoneVal = stateInfo.calltype === 'Inbound' ? stateInfo.fromnumber : stateInfo.tonumber;
+            option.push(config[e].alias + '=' + (phoneVal || ''));
             break;
+          }
           case 'recordingfile': {
             let recFile = '';
             if (data.disposition.toLowerCase() === 'answered' && this.store.arrRecordingFile[uniqueid]) {

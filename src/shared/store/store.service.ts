@@ -3,6 +3,7 @@ import { Injectable } from '@nestjs/common';
 @Injectable()
 export class StoreService {
   // Call lifecycle tracking
+  uniqueidToLinkedid: Record<string, string> = {};
   arrDialState: Record<string, any> = {};
   arrCompleteCall: Record<string, any> = {};
   arrRecordingFile: Record<string, any> = {};

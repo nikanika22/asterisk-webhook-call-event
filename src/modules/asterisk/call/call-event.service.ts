@@ -1,16 +1,18 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { StoreService } from '../../../shared/store/store.service';
 import { SocketService } from '../../../shared/socket/socket.service';
 import { WebhookService } from '../../webhook/webhook.service';
-import { encodeDataToClient, encodeDataToBase, getTimeFormat, getDurationTime } from '../../../shared/helpers/helpers';
+import { encodeDataToClient, encodeDataToBase, getTimeFormat, getDurationTime, parseChannel } from '../../../shared/helpers/helpers';
 
 @Injectable()
 export class CallEventService {
+  private readonly logger = new Logger(CallEventService.name);
+
   constructor(
     private readonly store: StoreService,
     private readonly socketService: SocketService,
     private readonly webhookService: WebhookService,
-  ) {}
+  ) { }
 
   makeCallEvent(type: string, callid: string) {
     if (!this.store.arrDialState[callid]) return;
@@ -63,6 +65,7 @@ export class CallEventService {
 
     delete params.value.webhookurl;
     delete params.value.recordingurl;
+    delete params.value.timer;
     if (params.value.calltype === 'Local') return;
 
     if (params.event === 'completed' || params.event === 'misscall') {
@@ -70,7 +73,7 @@ export class CallEventService {
         this.store.flagEvent[params.value.callrefid] = true;
       }, 1000);
     }
-    
+
     if (this.socketService.getIO()) {
       this.socketService.getIO()!.sockets.emit('callEvent', encodeDataToClient(params));
     }
@@ -102,24 +105,32 @@ export class CallEventService {
             ? getDurationTime(getTimeFormat(), this.store.arrDialState[callid].answertime)
             : 0;
         break;
-      case 'cdr':
-        if (data.status === 'answered') {
-          params.event = 'completed';
-          params.value.duration = this.store.arrCompleteCall[callid].duration;
-          params.value.billsec = this.store.arrCompleteCall[callid].billableseconds;
-          params.value.recording_file = '';
-        } else {
-          params.event = 'misscall';
-          params.value.recording_file = '';
-          params.value.duration = this.store.arrCompleteCall[callid].duration;
-          params.value.billsec = '0';
+      case 'completed':
+      case 'misscall': {
+        // Đọc CDR từ composite key: uniqueid::destchannel
+        const legKey = `${callid}::${data.destchannel}`;
+        const cdrData = this.store.arrCompleteCall[legKey];
+        if (!cdrData) {
+          this.logger.warn(`CDR not found for legKey=${legKey}`);
+          break;
         }
+        params.value.duration = cdrData.duration || '0';
+        params.value.billsec = type === 'completed' ? (cdrData.billableseconds || '0') : '0';
+        params.value.endtime = cdrData.endtime || '';
+        params.value.channel = cdrData.channel || '';
+        params.value.destchannel = cdrData.destchannel || '';
+        params.value.disposition = cdrData.disposition || '';
+
+        params.value.recording_file = '';
+        // tonumber đã được update đúng ở asterisk-events trước khi gọi vào đây
         break;
+      }
     }
 
     const url = params.value.webhookurl;
     delete params.value.webhookurl;
     delete params.value.recordingurl;
+    delete params.value.timer;
 
     if (type === 'cdr') {
       setTimeout(() => {
