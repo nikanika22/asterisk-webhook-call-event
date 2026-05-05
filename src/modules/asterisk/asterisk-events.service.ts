@@ -6,7 +6,7 @@ import { StoreService } from '../../shared/store/store.service';
 import { SocketService } from '../../shared/socket/socket.service';
 import { CallEventService } from './call/call-event.service';
 import { WebhookService } from '../webhook/webhook.service';
-import { encodeDataToClient, getTimeFormat, checkExtension, parseChannel } from '../../shared/helpers/helpers';
+import { encodeDataToClient, getTimeFormat, getDurationTime, checkExtension, parseChannel } from '../../shared/helpers/helpers';
 const INTERNAL_CONTEXTS = ['from-internal', 'from-extensions', 'dialOne-with-exten'];
 const OUTBOUND_CONTEXTS = ['trunk-dial-with-exten', 'from-internal-to-trunk'];
 const INBOUND_CONTEXTS = ['from-pstn', 'from-trunk', 'from-mas', 'ext-queues', 'dial-with-exten'];
@@ -186,9 +186,10 @@ export class AsteriskEventService implements OnModuleInit {
             fromnumber: calleridnum,
             calltype,
             channel,
-            extension: data.exten,
+            extension: parseChannel(destchannel) || " ",
             starttime: getTimeFormat(),
             status: 'initiating',
+            destination: (calltype !== "Outbound") ? data.exten : " ",
             callrefid: linkedid,
             linkedid: linkedid,
             webhookurl: webhook_select?.webhook_url?.callcenter || '',
@@ -200,6 +201,8 @@ export class AsteriskEventService implements OnModuleInit {
         } else {
           this.store.arrDialState[linkedid].destchannel = destchannel;
           this.store.arrDialState[linkedid].tonumber = tonumber_val;
+          this.store.arrDialState[linkedid].extension = parseChannel(destchannel) || " ";
+          this.store.arrDialState[linkedid].destination = (calltype !== "Outbound") ? data.exten : " ";
           this.store.arrDialState[linkedid].status = 'initiating';
 
           if (!this.store.arrDialState[linkedid].webhookurl && webhook_select) {
@@ -208,9 +211,14 @@ export class AsteriskEventService implements OnModuleInit {
             this.store.arrDialState[linkedid].groupid = webhook_select.id || '';
           }
         }
-
+        const isDestLocal = destchannel.toLowerCase().startsWith('local/');
+        if (isDestLocal) {
+          this.backupStateAsync();
+          this.logger.log(`dialbegin [WAITING for real dest]: ${JSON.stringify(this.store.arrDialState[linkedid], null, 2)}`);
+          return;
+        }
         this.backupStateAsync();
-        this.logger.log(`dialbegin: ${JSON.stringify(this.store.arrDialState[linkedid], null, 2)}`);
+        this.logger.log(`dialbegin [REAL LEG MERGED]: ${JSON.stringify(this.store.arrDialState[linkedid], null, 2)}`);
 
         if (this.store.arrDialState[linkedid].webhookurl) {
           this.callEventService.makeCallEventv2('ringing', linkedid);
@@ -225,21 +233,45 @@ export class AsteriskEventService implements OnModuleInit {
       if (!state) return;
       const destchannel = data.destchannel || '';
 
-      // Update tonumber theo nhánh hiện tại (không ghi đè nếu là Outbound vì destchannel là Trunk)
-      state.destchannel = destchannel;
-      if (state.calltype !== 'Outbound') {
-        state.tonumber = parseChannel(destchannel) || data.destcalleridnum || state.tonumber;
-      }
+      if (destchannel.toLowerCase().startsWith('local/')) return;
 
       if (data.dialstatus === 'ANSWER') {
+        state.destchannel = destchannel;
+        if (state.calltype !== 'Outbound') {
+          state.tonumber = parseChannel(destchannel) || data.destcalleridnum || state.tonumber;
+        }
+        state.extension = parseChannel(destchannel) || " ";
+        state.destination = (state.calltype !== "Outbound") ? (data.exten || " ") : " ";
         state.status = 'answered';
         this.logger.log(`dialend [ANSWER]: ${JSON.stringify(state, null, 2)}`);
         this.callEventService.makeCallEventv2('answered', linkedid);
         this.backupStateAsync();
       } else if (['NOANSWER', 'CONGESTION', 'CANCEL'].includes(data.dialstatus)) {
+        const prevDestChannel = state.destchannel;
+        const prevTonumber = state.tonumber;
+        const prevStatus = state.status;
+        const prevExtension = state.extension;
+        const prevDestination = state.destination;
+
+        state.destchannel = destchannel;
+        if (state.calltype !== 'Outbound') {
+          state.tonumber = parseChannel(destchannel) || data.destcalleridnum || state.tonumber;
+        }
+        state.extension = parseChannel(destchannel) || " ";
+        state.destination = (state.calltype !== "Outbound") ? (data.exten || " ") : " ";
         state.status = data.dialstatus.toLowerCase();
-        this.logger.log(`dialend [${data.dialstatus}]: ${JSON.stringify(state, null, 2)}`);
-        this.backupStateAsync();
+
+        this.logger.log(`dialend [${data.dialstatus}] (branch, master protected): ${JSON.stringify(state, null, 2)}`);
+
+        if (prevStatus === 'answered') {
+          state.destchannel = prevDestChannel;
+          state.tonumber = prevTonumber;
+          state.status = prevStatus;
+          state.extension = prevExtension;
+          state.destination = prevDestination;
+        } else {
+          this.backupStateAsync();
+        }
       }
     });
 
@@ -248,16 +280,48 @@ export class AsteriskEventService implements OnModuleInit {
       const linkedid = data.linkedid;
       const state = this.store.arrDialState[linkedid];
       if (!state) return;
+
+      const destchannel = data.destchannel || '';
+
+      // Bỏ qua event của kênh ảo
+      if (destchannel.toLowerCase().startsWith('local/')) return;
+
       if (['RINGING', 'NOANSWER', 'CONGESTION', 'CANCELLED', 'PROGRESS', 'BUSY'].includes(data.dialstatus)) {
         const lowerState = data.dialstatus.toLowerCase();
-        state.status = lowerState;
-        state.destchannel = data.destchannel || '';
-        if (state.calltype !== 'Outbound') {
-          state.tonumber = parseChannel(data.destchannel) || data.destcalleridnum || state.tonumber;
+
+        if (state.status === 'answered') {
+          const prevDestChannel = state.destchannel;
+          const prevTonumber = state.tonumber;
+          const prevExtension = state.extension;
+          const prevDestination = state.destination;
+
+          state.destchannel = destchannel;
+          if (state.calltype !== 'Outbound') {
+            state.tonumber = parseChannel(destchannel) || data.destcalleridnum || state.tonumber;
+          }
+          state.extension = parseChannel(destchannel) || " ";
+          state.destination = (state.calltype !== "Outbound") ? (data.exten || " ") : " ";
+          state.status = lowerState;
+
+          this.logger.log(`dialstate [${data.dialstatus}] (branch, master protected): ${JSON.stringify(state, null, 2)}`);
+
+          state.destchannel = prevDestChannel;
+          state.tonumber = prevTonumber;
+          state.extension = prevExtension;
+          state.destination = prevDestination;
+          state.status = 'answered';
+        } else {
+          state.status = lowerState;
+          state.destchannel = destchannel;
+          if (state.calltype !== 'Outbound') {
+            state.tonumber = parseChannel(destchannel) || data.destcalleridnum || state.tonumber;
+          }
+          state.extension = parseChannel(destchannel) || " ";
+          state.destination = (state.calltype !== "Outbound") ? (data.exten || " ") : " ";
+          this.logger.log(`dialstate [${data.dialstatus}]: ${JSON.stringify(state, null, 2)}`);
+          this.backupStateAsync();
         }
-        this.backupStateAsync();
       }
-      this.logger.log(`dialstate: ${JSON.stringify(state, null, 2)}`);
     });
 
     // === Hangup ===
@@ -267,12 +331,47 @@ export class AsteriskEventService implements OnModuleInit {
       if (!state) return;
 
       const isMaster = data.uniqueid === data.linkedid;
+      const channel = data.channel || '';
+      const isLocalChannel = channel.toLowerCase().startsWith('local/');
 
-      this.logger.log(`hangup [master=${isMaster}]: ${JSON.stringify(state, null, 2)}`);
+      if (isLocalChannel) {
+        this.logger.debug(`hangup [LOCAL channel ignored=${channel}]`);
+        return;
+      }
 
       if (isMaster) {
         state.status = 'hangup';
-        this.callEventService.makeCallEventv2('hangup', linkedid);
+        this.logger.log(`hangup [MASTER, channel=${channel}]: ${JSON.stringify(state, null, 2)}`);
+
+        // Hướng 2: Master bắn data riêng của caller channel, KHÔNG dùng state nhánh
+        // để tránh trùng lặp với branch hangup đã bắn trước.
+        const endtime = getTimeFormat();
+        const masterPayload = {
+          object: 'call',
+          event: 'caller_hangup',
+          value: {
+            fromnumber: state.fromnumber,
+            calltype: state.calltype,
+            channel: state.channel,                // Kênh caller gốc (PJSIP/8000-...)
+            extension: parseChannel(state.channel) || state.fromnumber, // Extension của caller
+            starttime: state.starttime,
+            status: 'caller_hangup',
+            destination: state.destination,
+            callrefid: state.callrefid,
+            linkedid: state.linkedid,
+            groupid: state.groupid,
+            tonumber: " ",
+            destchannel: state.channel,            // Caller channel chính là “khách”
+            endtime,
+            duration: getDurationTime(endtime, state.starttime),
+            billsec: state.answertime ? getDurationTime(endtime, state.answertime) : 0,
+          },
+        };
+
+        if (state.webhookurl) {
+          this.logger.log(`hangup [MASTER caller_hangup]: ${JSON.stringify(masterPayload.value, null, 2)}`);
+          this.webhookService.sendWebhook(state.webhookurl, masterPayload);
+        }
 
         setTimeout(() => {
           delete this.store.arrDialState[linkedid];
@@ -284,6 +383,30 @@ export class AsteriskEventService implements OnModuleInit {
           }
           if (fs.existsSync(this.backFilePath)) fs.unlink(this.backFilePath, () => { });
         }, 5000);
+      } else {
+        const prevDestChannel = state.destchannel;
+        const prevTonumber = state.tonumber;
+        const prevStatus = state.status;
+        const prevExtension = state.extension;
+        const prevDestination = state.destination;
+
+        state.destchannel = channel;
+        if (state.calltype !== 'Outbound') {
+          state.tonumber = parseChannel(channel) || state.tonumber;
+        }
+        state.extension = parseChannel(channel) || " ";
+        state.destination = (state.calltype !== "Outbound") ? (data.exten || " ") : " ";
+        state.status = 'hangup';
+
+        this.logger.log(`hangup [branch, channel=${channel}]: ${JSON.stringify(state, null, 2)}`);
+        this.callEventService.makeCallEventv2('hangup', linkedid);
+
+        // Khôi phục lại Master State
+        state.destchannel = prevDestChannel;
+        state.tonumber = prevTonumber;
+        state.extension = prevExtension;
+        state.destination = prevDestination;
+        state.status = prevStatus;
       }
     });
 
@@ -296,23 +419,34 @@ export class AsteriskEventService implements OnModuleInit {
       // Bỏ qua CDR giả/đảo luồng
       if (!data.destinationchannel || data.destinationchannel.startsWith('AppDial')) return;
       if (data.destinationcontext === 'app-blackhole') return;
-
+      if (data.lastapplication !== 'Dial') return;
       const destchannel = data.destinationchannel;
-
       const legKey = `${linkedid}::${destchannel}`;
       this.store.arrCompleteCall[legKey] = data;
 
-      // Cập nhật state theo nhánh CDR hiện tại để makeCallEventv2 ghép đúng legKey
+      // Dùng Temporary Swap: mượn tạm state để log và bắn webhook đúng nhánh CDR
+      // rồi khôi phục lại Master State — giữ nguyên kênh chiến thắng không bị ghi đè
+      const prevDestChannel = state.destchannel;
+      const prevTonumber = state.tonumber;
+      const prevStatus = state.status;
+      const prevDisposition = state.disposition;
+
       state.destchannel = destchannel;
       if (state.calltype !== 'Outbound') {
         state.tonumber = parseChannel(destchannel) || state.tonumber;
       }
-
       const eventType = data.disposition === 'ANSWERED' ? 'completed' : 'misscall';
       state.status = eventType;
       state.disposition = data.disposition;
+
       this.logger.log(`cdr [${eventType}]: ${JSON.stringify(state, null, 2)}`);
       this.callEventService.makeCallEventv2(eventType, linkedid);
+
+      // Khôi phục Master State về kênh chiến thắng (bao gồm cả disposition)
+      state.destchannel = prevDestChannel;
+      state.tonumber = prevTonumber;
+      state.status = prevStatus;
+      state.disposition = prevDisposition;
     });
 
 

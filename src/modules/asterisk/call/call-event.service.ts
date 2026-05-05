@@ -117,8 +117,8 @@ export class CallEventService {
         params.value.duration = cdrData.duration || '0';
         params.value.billsec = type === 'completed' ? (cdrData.billableseconds || '0') : '0';
         params.value.endtime = cdrData.endtime || '';
-        params.value.channel = cdrData.channel || '';
-        params.value.destchannel = cdrData.destchannel || '';
+        // params.value.channel = cdrData.channel || '';
+        params.value.destchannel = cdrData.destinationchannel || '';
         params.value.disposition = cdrData.disposition || '';
 
         params.value.recording_file = '';
