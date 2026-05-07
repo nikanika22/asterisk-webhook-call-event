@@ -13,3 +13,5 @@ AGENTS.md
 CHANGELOG.md
 /dist
 docs/
+.claude/
+.github/

@@ -79,14 +79,18 @@ export class CallEventService {
     }
   }
 
-  makeCallEventv2(type: string, callid: string) {
+  makeCallEventv2(type: string, callid: string, sourceData?: Record<string, any>) {
     if (!this.store.arrDialState[callid]) return;
     const params: any = {
       object: 'call',
       event: type,
       value: {},
     };
+    // Clone master state, rồi override bằng sourceData (branchState) nếu có
     const data = JSON.parse(JSON.stringify(this.store.arrDialState[callid]));
+    if (sourceData) {
+      Object.assign(data, sourceData);
+    }
     params.value = data;
 
     switch (type) {
@@ -135,7 +139,7 @@ export class CallEventService {
     if (type === 'cdr') {
       setTimeout(() => {
         this.webhookService.sendWebhook(url, params);
-      }, 2000);
+      }, 500);
     } else {
       this.webhookService.sendWebhook(url, params);
     }

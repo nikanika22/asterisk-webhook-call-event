@@ -5,6 +5,7 @@ export class StoreService {
   // Call lifecycle tracking
   uniqueidToLinkedid: Record<string, string> = {};
   arrDialState: Record<string, any> = {};
+  arrBranchState: Record<string, any> = {};
   arrCompleteCall: Record<string, any> = {};
   arrRecordingFile: Record<string, any> = {};
   arrQueue: Record<string, any> = {};
