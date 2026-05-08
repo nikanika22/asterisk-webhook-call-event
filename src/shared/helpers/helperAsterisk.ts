@@ -327,7 +327,7 @@ export function isValidCdrEvent(data: any): boolean {
     return true;
 }
 
-export function shouldSynthesizeMisscall(state: any, branchState: any, channel: string, branchKey: string, arrCompleteCall: any): boolean {
+export function handleMissedCallsInSequence(state: any, branchState: any, channel: string, branchKey: string, arrCompleteCall: any): boolean {
     const isAnsweredBranch = state.status === 'answered' && channel === state.destchannel;
     return state.isMultiBranch && !!branchState && !isAnsweredBranch && !arrCompleteCall[branchKey];
 }

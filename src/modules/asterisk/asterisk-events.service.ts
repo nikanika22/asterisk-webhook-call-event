@@ -14,7 +14,7 @@ import {
   applyChannelStateUpdate, buildMasterHangupOverride, updateMasterWebhookIfMissing,
   buildBranchKey, buildExtensionStatusPayload, storeQueueCaller, applyAgentConnect,
   buildQueueSummaryWebhook, storeChanspy, removeChanspy, resolveRecordingKey,
-  buildDeviceStateWebhook, isValidCdrEvent, shouldSynthesizeMisscall,
+  buildDeviceStateWebhook, isValidCdrEvent, handleMissedCallsInSequence,
   SOCKET_RELAY,
 } from '../../shared/helpers/helperAsterisk';
 
@@ -176,7 +176,6 @@ export class AsteriskEventService implements OnModuleInit {
     const linkedid = data.linkedid;
     const state = this.store.arrDialState[linkedid];
     if (!state) return;
-
     const destchannel = data.destchannel || '';
 
     if (destchannel.toLowerCase().startsWith('local/')) return;
@@ -232,7 +231,7 @@ export class AsteriskEventService implements OnModuleInit {
       this.logger.log(`hangup [branch, channel=${channel}]: ${JSON.stringify({ ...state, ...branchOverride }, null, 2)}`);
       this.callEventService.makeCallEventv2('hangup', linkedid, branchOverride);
 
-      if (shouldSynthesizeMisscall(state, branchState, channel, branchKey, this.store.arrCompleteCall)) {
+      if (handleMissedCallsInSequence(state, branchState, channel, branchKey, this.store.arrCompleteCall)) {
         this.store.arrCompleteCall[branchKey] = createSyntheticCdr(channel, getTimeFormat());
         branchState.status = 'misscall';
         this.logger.log(`hangup [EARLY CDR synthesis, misscall]: key=${branchKey}`);
