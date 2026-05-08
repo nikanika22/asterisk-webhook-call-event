@@ -15,3 +15,5 @@ CHANGELOG.md
 docs/
 .claude/
 .github/
+/logtxtQueueandRingIngGroup/
+report-asterisk-events.md
