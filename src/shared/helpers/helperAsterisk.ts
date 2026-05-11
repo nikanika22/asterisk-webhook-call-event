@@ -74,7 +74,7 @@ export function classifyCall(data: any, calleridnum: string, connectedlinenum: s
     } else {
         const isLocal = destchannel.toLowerCase().startsWith('local/');
         const destExt = isLocal ? null : parseChannel(destchannel);
-        tonumber_val = destExt || data.exten || data.destcalleridnum || '';
+        tonumber_val = destExt || data.destcalleridnum || '';
     }
 
     return { calltype, tonumber_val };
@@ -91,7 +91,7 @@ export function buildMasterState(data: any, calleridnum: string, calltype: strin
         fromnumber: calleridnum,
         calltype,
         channel,
-        extension: destchannel.toLowerCase().startsWith('local/') ? (data.exten || ' ') : (parseChannel(destchannel) || ' '),
+        extension: destchannel.toLowerCase().startsWith('local/') ? (' ') : (parseChannel(destchannel) || ' '),
         starttime: timeFormat,
         status: 'initiating',
         destination: (calltype !== 'Outbound') ? data.exten : ' ',
@@ -135,7 +135,7 @@ export function cleanupCallState(store: StoreService, linkedid: string, backFile
     for (const key of Object.keys(store.arrBranchState)) {
         if (key.startsWith(`${linkedid}::`)) delete store.arrBranchState[key];
     }
-    if (fs.existsSync(backFilePath)) fs.unlink(backFilePath, () => { });
+    // backupStateAsync(store, backFilePath);
 }
 
 export function createSyntheticCdr(channel: string, timeFormat: string) {
@@ -207,7 +207,7 @@ export function applyChannelStateUpdate(state: any, destchannel: string, data: a
         state.tonumber = parseChannel(destchannel) || data.destcalleridnum || state.tonumber;
     }
     state.extension = parseChannel(destchannel) || ' ';
-    state.destination = (state.calltype !== 'Outbound') ? (state.destination || ' ') : ' ';
+    state.destination = (state.calltype !== 'Outbound') ? (state.destination) : '';
     state.status = status;
 }
 
@@ -328,6 +328,11 @@ export function isValidCdrEvent(data: any): boolean {
 }
 
 export function handleNoAnsweredCalls(state: any, branchState: any, channel: string, branchKey: string, arrCompleteCall: any): boolean {
+    // Xác định nhánh "kẻ thắng cuộc": cuộc gọi đã được nghe VÀ đây chính là kênh đã nghe máy
     const isAnsweredBranch = state.status === 'answered' && channel === state.destchannel;
-    return state.isMultiBranch && !!branchState && !isAnsweredBranch && !arrCompleteCall[branchKey];
+    // Tổng hợp CDR sớm (Synthetic CDR) khi:
+    // 1. !!branchState    — Đây là kênh thật của Agent (không phải kênh Local/ ảo của Queue)
+    // 2. !isAnsweredBranch — Nhánh này KHÔNG phải người đã nghe máy (là "kẻ thua cuộc" / gọi nhỡ)
+    // 3. !arrCompleteCall  — Chưa có CDR thật nào từ Asterisk gửi về trước đó (tránh gửi trùng)
+    return !!branchState && !isAnsweredBranch && !arrCompleteCall[branchKey];
 }
