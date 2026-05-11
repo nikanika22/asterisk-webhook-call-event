@@ -220,6 +220,7 @@ export class AsteriskEventService implements OnModuleInit {
 
       setTimeout(() => {
         cleanupCallState(this.store, linkedid, this.backFilePath);
+        this.backupStateAsync();
       }, 50);
     } else {
       const branchKey = buildBranchKey(linkedid, channel);
