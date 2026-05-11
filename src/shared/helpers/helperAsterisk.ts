@@ -135,7 +135,7 @@ export function cleanupCallState(store: StoreService, linkedid: string, backFile
     for (const key of Object.keys(store.arrBranchState)) {
         if (key.startsWith(`${linkedid}::`)) delete store.arrBranchState[key];
     }
-    if (fs.existsSync(backFilePath)) fs.unlink(backFilePath, () => { });
+    // backupStateAsync(store, backFilePath);
 }
 
 export function createSyntheticCdr(channel: string, timeFormat: string) {
