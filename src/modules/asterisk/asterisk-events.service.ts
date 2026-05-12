@@ -211,9 +211,10 @@ export class AsteriskEventService implements OnModuleInit {
     }
 
     if (isMaster) {
+      const wasAnswered = state.status === 'answered';
       state.status = 'hangup';
 
-      const masterOverride = buildMasterHangupOverride(state, data);
+      const masterOverride = buildMasterHangupOverride(state, data, wasAnswered);
 
       this.logger.log(`hangup [MASTER, channel=${channel}]: ${JSON.stringify({ ...state, ...masterOverride }, null, 2)}`);
       this.callEventService.makeCallEventv2('hangup', linkedid, masterOverride);

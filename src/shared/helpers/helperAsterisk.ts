@@ -211,24 +211,30 @@ export function applyChannelStateUpdate(state: any, destchannel: string, data: a
     state.status = status;
 }
 
-export function buildMasterHangupOverride(state: any, data: any) {
+export function buildMasterHangupOverride(state: any, data: any, wasAnswered = false) {
     const isMultiBranch = !!state.isMultiBranch;
     const channel = state.channel || data.channel || '';
-    const connectedlinenum = (data.connectedlinenum && data.connectedlinenum !== '<unknown>')
+    const connectedExtension = (data.connectedlinenum && data.connectedlinenum !== '<unknown>')
         ? data.connectedlinenum
-        : state.tonumber || '';
-    let actualToNumber = state.tonumber;
+        : '';
     if (isMultiBranch) {
-        // Ưu tiên 1: Lấy từ event Hangup (connectedlinenum)
-        // Ưu tiên 2: Fallback về destchannel cuối cùng mà master đã lưu
-        actualToNumber = connectedlinenum || parseChannel(state.destchannel) || state.tonumber;
+        const answeredExtension = wasAnswered
+            ? (connectedExtension || parseChannel(state.destchannel) || state.tonumber || '')
+            : '';
+        return {
+            channel: channel,
+            destchannel: answeredExtension ? (state.destchannel || '') : '',
+            extension: answeredExtension,
+            tonumber: answeredExtension,
+            status: 'hangup',
+        };
     }
 
     return {
         channel: channel,
         destchannel: state.channel,
-        extension: isMultiBranch ? state.fromnumber : (parseChannel(state.channel) || state.fromnumber),
-        tonumber: actualToNumber,
+        extension: parseChannel(state.channel) || state.fromnumber,
+        tonumber: state.tonumber,
         status: 'hangup',
     };
 }
