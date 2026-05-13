@@ -1,7 +1,7 @@
-import { Injectable, OnModuleInit, Logger } from '@nestjs/common';
+import { Injectable, OnApplicationBootstrap, Logger } from '@nestjs/common';
 import * as fs from 'fs';
 import * as path from 'path';
-import { AsteriskService } from '../../core/asterisk/asterisk.service';
+import { AmiConnectionManager } from '../../core/asterisk/ami-connection-manager.service';
 import { StoreService } from '../../shared/store/store.service';
 import { SocketService } from '../../shared/socket/socket.service';
 import { CallEventService } from './call/call-event.service';
@@ -19,19 +19,20 @@ import {
 } from '../../shared/helpers/helperAsterisk';
 
 @Injectable()
-export class AsteriskEventService implements OnModuleInit {
+export class AsteriskEventService implements OnApplicationBootstrap {
   private readonly logger = new Logger(AsteriskEventService.name);
   private readonly backFilePath = path.join(process.cwd(), 'logs', 'dial_statebackup.json');
 
   constructor(
-    private readonly asterisk: AsteriskService,
+    private readonly amiManager: AmiConnectionManager,
     private readonly store: StoreService,
     private readonly socketService: SocketService,
     private readonly callEventService: CallEventService,
     private readonly webhookService: WebhookService,
   ) { }
 
-  onModuleInit() {
+  // Task 4.8 — restoreState is called once at bootstrap, before listeners attach
+  onApplicationBootstrap() {
     restoreState(this.store, this.backFilePath, this.logger);
     this.attachListeners();
   }
@@ -44,63 +45,63 @@ export class AsteriskEventService implements OnModuleInit {
     const io = () => this.socketService.getIO();
 
     SOCKET_RELAY.forEach(([event, socketEvent]) =>
-      this.asterisk.on(event, (data) => io()?.sockets.emit(socketEvent, encodeDataToClient(data)))
+      this.amiManager.onAll(event, (data) => io()?.sockets.emit(socketEvent, encodeDataToClient(data)))
     );
 
-    this.asterisk.on('extensionstatus', (data) => {
+    this.amiManager.onAll('extensionstatus', (data) => {
       io()?.sockets.emit('deviceStatus', encodeDataToClient(buildExtensionStatusPayload(data)));
     });
 
-    this.asterisk.on('queuecallerjoin', (data) => {
-      storeQueueCaller(this.store, data);
+    this.amiManager.onAll('queuecallerjoin', (data, pbxId) => {
+      storeQueueCaller(this.store, data, pbxId);
       io()?.sockets.emit('queuecallerjoin', encodeDataToClient(data));
     });
 
-    this.asterisk.on('agentconnect', (data) => {
+    this.amiManager.onAll('agentconnect', (data) => {
       io()?.sockets.emit('agentconnect', encodeDataToClient(data));
       applyAgentConnect(this.store, data);
     });
 
-    this.asterisk.on('queuesummary', (data) => {
+    this.amiManager.onAll('queuesummary', (data) => {
       io()?.sockets.emit('queueSummary', encodeDataToClient(data));
       for (const { url, params } of buildQueueSummaryWebhook(this.store.arrWebhook, data)) {
         this.webhookService.sendPostRequestv2(url, params);
       }
     });
 
-    this.asterisk.on('meetmejoin', (data) => {
+    this.amiManager.onAll('meetmejoin', (data) => {
       storeChanspy(this.store, data);
       io()?.sockets.emit('meetmejoin', encodeDataToClient(data));
     });
 
-    this.asterisk.on('meetmeleave', (data) => {
+    this.amiManager.onAll('meetmeleave', (data) => {
       removeChanspy(this.store, data.uniqueid);
       io()?.sockets.emit('meetmeleave', encodeDataToClient(data));
     });
 
-    this.asterisk.on('newexten', (data) => {
+    this.amiManager.onAll('newexten', (data) => {
       const recordInfo = extractRecordingInfo(data);
       if (recordInfo) {
         this.store.arrRecordingFile[resolveRecordingKey(this.store, data)] = recordInfo;
       }
     });
 
-    this.asterisk.on('devicestatechange', (data) => {
+    this.amiManager.onAll('devicestatechange', (data) => {
       for (const { url, params } of buildDeviceStateWebhook(this.store.arrWebhook, data)) {
         this.webhookService.sendPostRequestv2(url, params);
       }
     });
-
-    this.asterisk.on('dialbegin', (data) => this.onDialBegin(data));
-    this.asterisk.on('dialend', (data) => this.onDialEnd(data));
-    this.asterisk.on('dialstate', (data) => this.onDialState(data));
-    this.asterisk.on('hangup', (data) => this.onHangup(data));
-    this.asterisk.on('cdr', (data) => this.onCdr(data));
+    this.amiManager.onAll('dialbegin', (data, pbxId) => this.onDialBegin(data, pbxId));
+    this.amiManager.onAll('dialend', (data, pbxId) => this.onDialEnd(data, pbxId));
+    this.amiManager.onAll('dialstate', (data, pbxId) => this.onDialState(data, pbxId));
+    this.amiManager.onAll('hangup', (data, pbxId) => this.onHangup(data, pbxId));
+    this.amiManager.onAll('cdr', (data, pbxId) => this.onCdr(data, pbxId));
   }
+  private onDialBegin(data: any, pbxId: string) {
+    const rawLinkedid = data.linkedid;
+    const linkedid = `${pbxId}::${rawLinkedid}`;
 
-  private onDialBegin(data: any) {
-    const linkedid = data.linkedid;
-    this.store.uniqueidToLinkedid[data.uniqueid] = linkedid;
+    this.store.uniqueidToLinkedid[`${pbxId}::${data.uniqueid}`] = linkedid;
 
     const destchannel = data.destchannel || '';
     const connectedlinenum = data.connectedlinenum || '';
@@ -112,7 +113,6 @@ export class AsteriskEventService implements OnModuleInit {
     const { calltype, tonumber_val } = classifyCall(data, calleridnum, connectedlinenum, destchannel);
 
     if (isValidChannelForWebhook(channel, destchannel)) {
-
       const webhook_select = findWebhookByExtension(this.store.arrWebhook, ext);
 
       const masterAlreadyExisted = !!this.store.arrDialState[linkedid];
@@ -136,7 +136,7 @@ export class AsteriskEventService implements OnModuleInit {
         return;
       }
 
-      const branchKey = buildBranchKey(linkedid, destchannel);
+      const branchKey = buildBranchKey(pbxId, rawLinkedid, destchannel);
       const master = this.store.arrDialState[linkedid];
       this.store.arrBranchState[branchKey] = buildBranchState(
         master, calleridnum, destchannel, tonumber_val, linkedid, getTimeFormat()
@@ -156,8 +156,9 @@ export class AsteriskEventService implements OnModuleInit {
     }
   }
 
-  private onDialEnd(data: any) {
-    const linkedid = data.linkedid;
+  // Task 4.4
+  private onDialEnd(data: any, pbxId: string) {
+    const linkedid = `${pbxId}::${data.linkedid}`;
     const state = this.store.arrDialState[linkedid];
     if (!state) return;
     const destchannel = data.destchannel || '';
@@ -172,8 +173,9 @@ export class AsteriskEventService implements OnModuleInit {
     }
   }
 
-  private onDialState(data: any) {
-    const linkedid = data.linkedid;
+  // Task 4.5
+  private onDialState(data: any, pbxId: string) {
+    const linkedid = `${pbxId}::${data.linkedid}`;
     const state = this.store.arrDialState[linkedid];
     if (!state) return;
     const destchannel = data.destchannel || '';
@@ -182,7 +184,7 @@ export class AsteriskEventService implements OnModuleInit {
 
     if (['RINGING', 'NOANSWER', 'CONGESTION', 'CANCELLED', 'PROGRESS', 'BUSY'].includes(data.dialstatus)) {
       const lowerState = data.dialstatus.toLowerCase();
-      const branchKey = buildBranchKey(linkedid, destchannel);
+      const branchKey = buildBranchKey(pbxId, data.linkedid, destchannel);
       const branchState = this.store.arrBranchState[branchKey];
 
       if (branchState) {
@@ -196,8 +198,9 @@ export class AsteriskEventService implements OnModuleInit {
     }
   }
 
-  private onHangup(data: any) {
-    const linkedid = data.linkedid;
+  // Task 4.6
+  private onHangup(data: any, pbxId: string) {
+    const linkedid = `${pbxId}::${data.linkedid}`;
     const state = this.store.arrDialState[linkedid];
     if (!state) return;
 
@@ -220,11 +223,11 @@ export class AsteriskEventService implements OnModuleInit {
       this.callEventService.makeCallEventv2('hangup', linkedid, masterOverride);
 
       setTimeout(() => {
-        cleanupCallState(this.store, linkedid, this.backFilePath);
+        cleanupCallState(this.store, pbxId, data.linkedid, this.backFilePath);
         this.backupStateAsync();
       }, 50);
     } else {
-      const branchKey = buildBranchKey(linkedid, channel);
+      const branchKey = buildBranchKey(pbxId, data.linkedid, channel);
       const branchState = this.store.arrBranchState[branchKey];
 
       const branchOverride = resolveBranchOverride(branchState, channel, state, state.destination);
@@ -242,14 +245,19 @@ export class AsteriskEventService implements OnModuleInit {
     }
   }
 
-  private onCdr(data: any) {
-    const linkedid = this.store.uniqueidToLinkedid[data.uniqueid] || data.uniqueid;
+  // Task 4.7 — uniqueidToLinkedid lookup uses pbxId:: namespaced key
+  private onCdr(data: any, pbxId: string) {
+    const cdrUniqueKey = `${pbxId}::${data.uniqueid}`;
+    const linkedid = this.store.uniqueidToLinkedid[cdrUniqueKey] || `${pbxId}::${data.uniqueid}`;
     const state = this.store.arrDialState[linkedid];
     if (!state) return;
 
     if (!isValidCdrEvent(data)) return;
     const destchannel = data.destinationchannel;
-    const legKey = buildBranchKey(linkedid, destchannel);
+
+    // rawLinkedid is extracted from the namespaced key for buildBranchKey
+    const rawLinkedid = linkedid.startsWith(`${pbxId}::`) ? linkedid.slice(pbxId.length + 2) : linkedid;
+    const legKey = buildBranchKey(pbxId, rawLinkedid, destchannel);
 
     if (this.store.arrCompleteCall[legKey]) {
       this.logger.debug(`cdr [SKIP, already processed]: ${legKey}`);

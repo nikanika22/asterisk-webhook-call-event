@@ -1,30 +1,13 @@
 import { Injectable, OnApplicationBootstrap, Logger } from '@nestjs/common';
 import { EventEmitter } from 'events';
-import { ConfigService } from '@nestjs/config';
 
-// ─── Constants (giữ nguyên từ asteriskService.js) ────────────────────────────
-const INTERNAL_CONTEXTS = ['from-internal', 'from-extensions'];
-const OUTBOUND_CONTEXTS = ['trunk-dial-with-exten', 'from-internal-to-trunk'];
-const INBOUND_CONTEXTS = ['from-pstn', 'from-trunk', 'from-mas'];
-
-const ALLOWED_EVENTS = new Set([
-  'dialbegin',
-  'dialstate',
-  'hangup',
-  'cdr',
-  'dialend',
-  // 'extensionstatus',
-]);
 
 /**
- * AsteriskService — migrate từ asteriskService.js
+ * AsteriskService — legacy single-instance AMI wrapper kept for backward compat.
+ * Action services (CallService, QueueService, etc.) use this to send AMI commands.
+ * For multi-PBX event listening, use AmiConnectionManager instead.
  *
- * - Extend EventEmitter (giống bản gốc class AMIEventBus)
- * - Implement OnApplicationBootstrap → startAMI() sau khi server sẵn sàng
- * - Expose ami instance để các service khác gọi ami.action()
- * - AMI event listeners thuần túy (dialbegin, dialend, hangup, cdr, dialstate)
- *   được đăng ký tại đây; logic nghiệp vụ (backupState, makeCallEventv2...)
- *   sẽ được thực hiện bởi CallEventService inject vào sau.
+ * Reads from AMI_HOST_01 / AMI_PORT_01 / AMI_USER_01 / AMI_PASS_01 (new naming convention).
  */
 @Injectable()
 export class AsteriskService extends EventEmitter implements OnApplicationBootstrap {
@@ -32,7 +15,7 @@ export class AsteriskService extends EventEmitter implements OnApplicationBootst
   private isStarted = false;
   private ami: any;
 
-  constructor(private readonly configService: ConfigService) {
+  constructor() {
     super();
   }
 
@@ -44,10 +27,15 @@ export class AsteriskService extends EventEmitter implements OnApplicationBootst
     if (this.isStarted) return;
     this.isStarted = true;
 
-    const amiHost = this.configService.get<string>('AMI_HOST')!;
-    const amiPort = this.configService.get<number>('AMI_PORT')!;
-    const amiUser = this.configService.get<string>('AMI_USER')!;
-    const amiPass = this.configService.get<string>('AMI_PASS')!;
+    const amiHost = process.env['AMI_HOST_01']!;
+    const amiPort = parseInt(process.env['AMI_PORT_01'] || '5038', 10);
+    const amiUser = process.env['AMI_USER_01']!;
+    const amiPass = process.env['AMI_PASS_01']!;
+
+    if (!amiHost || !amiUser || !amiPass) {
+      this.logger.error('[AMI] AsteriskService: missing AMI_HOST_01 / AMI_USER_01 / AMI_PASS_01 in env. Skipping legacy connection.');
+      return;
+    }
 
     // Dùng require() vì asterisk-manager không có type declarations tốt
     // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -74,20 +62,6 @@ export class AsteriskService extends EventEmitter implements OnApplicationBootst
         if (err) return this.logger.error('[AMI] Failed to subscribe events:', err);
         this.logger.log(`[AMI] Event subscription: ${res && res.response}`);
       });
-    });
-
-    // Tất cả events từ PBX đi qua đây, lọc bởi ALLOWED_EVENTS rồi emit lên bus
-    this.ami.on('managerevent', (evt: any) => {
-      const eventName = (evt.event || '').toLowerCase();
-
-      // Emit raw managerevent để các service khác có thể lắng nghe nếu cần
-      this.emit('managerevent', evt);
-
-      if (!ALLOWED_EVENTS.has(eventName)) return;
-
-      this.logger.debug(`[AMI] managerevent: ${eventName}`);
-      console.log(evt);
-      this.emit(eventName, evt);
     });
   }
 

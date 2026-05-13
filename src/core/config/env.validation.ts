@@ -18,18 +18,6 @@ export class EnvironmentVariables {
   @IsString()
   DB_NAME!: string;
 
-  @IsString()
-  AMI_HOST!: string;
-
-  @IsNumber()
-  AMI_PORT!: number;
-
-  @IsString()
-  AMI_USER!: string;
-
-  @IsString()
-  AMI_PASS!: string;
-
   @IsNumber()
   SOCKET_PORT!: number;
 
