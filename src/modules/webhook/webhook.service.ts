@@ -8,6 +8,7 @@ import { ConfigService } from '@nestjs/config';
 import { DATABASE_POOL } from '../../shared/database/database.providers';
 import { StoreService } from '../../shared/store/store.service';
 import { encodeDataToBase, getTimeFormat } from '../../shared/helpers/helpers';
+import { getRuntimeConfig } from '../../core/config/runtime-config';
 
 const BLOCKED_URLS = [
   'https://demo.cloudpro.vn/webhook.php?name=MiTekConnector&secret_key=a3eb8ce8c4a0e8659e95a1a5516af89e',
@@ -33,7 +34,7 @@ export class WebhookService implements OnApplicationBootstrap {
   onApplicationBootstrap() {
     setTimeout(() => {
       this.getWebhookInfo();
-    }, 2000);
+    }, getRuntimeConfig().setTimeoutMs);
   }
   // --- DB Helpers ---
   private query(sql: string, params: any[] = []): Promise<any> {
@@ -169,7 +170,7 @@ export class WebhookService implements OnApplicationBootstrap {
             if (e.length > 7) did.push(e);
           });
         }
-        this.logger.log(`extensions ${extensions.length}`);
+        if (getRuntimeConfig().logEnabled) this.logger.log(`extensions ${extensions.length}`);
         item.did = did;
         item.extensions = extensions;
         item.queues = queues;
@@ -179,7 +180,7 @@ export class WebhookService implements OnApplicationBootstrap {
         item.webhook_type = item.webhook_type && item.webhook_type !== 'null' ? JSON.parse(item.webhook_type) : {};
         this.store.arrWebhook[keyHookName] = item;
       });
-      this.logger.log(`[Webhook] Loaded ${Object.keys(this.store.arrWebhook).length} webhooks`);
+      if (getRuntimeConfig().logEnabled) this.logger.log(`[Webhook] Loaded ${Object.keys(this.store.arrWebhook).length} webhooks`);
     } catch (err: any) {
       this.logger.error(`[Webhook] Error loading webhook info: ${err.message}`);
     }
@@ -230,7 +231,7 @@ export class WebhookService implements OnApplicationBootstrap {
           opts710.url = 'https://social-zoho-socket.micxm.vn/webhooksEventCall';
           request(opts710, this._logHandler(opts710.url));
         }
-        this.logger.log(`--- ${params.event} : ${getTimeFormat()} - > ${params.value.fromnumber} ${params.value.calltype} ${params.value.tonumber}`);
+        if (getRuntimeConfig().logEnabled) this.logger.log(`--- ${params.event} : ${getTimeFormat()} - > ${params.value.fromnumber} ${params.value.calltype} ${params.value.tonumber}`);
         const opts = this._buildOpts(url, params);
         request(opts, (err: any, res: any, body: any) => {
           if (err) {
@@ -238,7 +239,7 @@ export class WebhookService implements OnApplicationBootstrap {
             return;
           }
           this._cleanupAfterCall(params);
-          this.logger.log(`[SendPostV2] Response: ${JSON.stringify(body)}`);
+          if (getRuntimeConfig().logEnabled) this.logger.log(`[SendPostV2] Response: ${JSON.stringify(body)}`);
         });
         if (BLOCKED_URLS.indexOf(url) > -1) {
           const opts2 = this._buildOpts(FALLBACK_URL, params);
@@ -249,7 +250,7 @@ export class WebhookService implements OnApplicationBootstrap {
       }
     } else {
       request(this._buildOpts(url, params), (err: any, res: any, body: any) => {
-        if (!err) this.logger.log(`[SendPostV2 AgentStatus] Response: ${JSON.stringify(body)}`);
+        if (!err && getRuntimeConfig().logEnabled) this.logger.log(`[SendPostV2 AgentStatus] Response: ${JSON.stringify(body)}`);
       });
       if (BLOCKED_URLS.indexOf(url) > -1) {
         request(this._buildOpts(FALLBACK_URL, params), () => { });
@@ -260,19 +261,18 @@ export class WebhookService implements OnApplicationBootstrap {
   async sendWebhook(url: string, params: any) {
     if (!url) return;
     const id = await this.logPending(params, url);
-    const MAX_RETRY = 3;
-    const DELAY_BETWEEN_RETRY = 1000;
-    for (let attempt = 1; attempt <= MAX_RETRY; attempt++) {
+    const runtimeConfig = getRuntimeConfig();
+    for (let attempt = 1; attempt <= runtimeConfig.maxRetry; attempt++) {
       try {
         const res = await axios.post(url, params);
-        this.logger.log(`[Webhook] send success (attempt ${attempt}): ${url}`);
+        if (runtimeConfig.logEnabled) this.logger.log(`[Webhook] send success (attempt ${attempt}): ${url}`);
         const responseData = typeof res.data === 'object' ? JSON.stringify(res.data) : res.data;
         await this.updateStatus(id, 'sent', res.status, responseData, attempt);
         return;
       } catch (err: any) {
-        this.logger.log(`[Webhook] Attempt ${attempt}/${MAX_RETRY} failed: ${url}`);
-        if (attempt < MAX_RETRY) {
-          await new Promise((resolve) => setTimeout(resolve, DELAY_BETWEEN_RETRY));
+        if (runtimeConfig.logEnabled) this.logger.log(`[Webhook] Attempt ${attempt}/${runtimeConfig.maxRetry} failed: ${url}`);
+        if (attempt < runtimeConfig.maxRetry) {
+          await new Promise((resolve) => setTimeout(resolve, runtimeConfig.retryDelayMs));
         } else {
           if (err.code === 'ECONNREFUSED') {
             await this.updateStatus(id, 'failed', 500, err.code, attempt);
@@ -303,7 +303,7 @@ export class WebhookService implements OnApplicationBootstrap {
   private _logHandler(url: string) {
     return (err: any, res: any, body: any) => {
       if (err) this.logger.error(`ERROR POST ${url} ${JSON.stringify(err)}`);
-      else this.logger.log(`RESPONSE POST ${url} ${JSON.stringify(body)}`);
+      else if (getRuntimeConfig().logEnabled) this.logger.log(`RESPONSE POST ${url} ${JSON.stringify(body)}`);
     };
   }
 
@@ -318,11 +318,11 @@ export class WebhookService implements OnApplicationBootstrap {
 
   sendGetRequest(url: string, method: string = 'GET') {
     if (method === 'GET') {
-      this.logger.log(`*** ${getTimeFormat()} | ${url}`);
+      if (getRuntimeConfig().logEnabled) this.logger.log(`*** ${getTimeFormat()} | ${url}`);
       request.get(url, (err: any, res: any, body: any) => {
         if (err) this.logger.error(`Error ${err}`);
         else {
-          this.logger.log(`[SendGetRequest] Response: ${JSON.stringify(body)}`);
+          if (getRuntimeConfig().logEnabled) this.logger.log(`[SendGetRequest] Response: ${JSON.stringify(body)}`);
         }
       });
     }
@@ -432,9 +432,9 @@ export class WebhookService implements OnApplicationBootstrap {
     const url = log.webhook_url;
 
     try {
-      const res = await axios.post(url, params, { timeout: 2000 });
+      const res = await axios.post(url, params, { timeout: getRuntimeConfig().setTimeoutMs });
       const responseData = typeof res.data === 'object' ? JSON.stringify(res.data) : res.data;
-      this.logger.log(`[Webhook] Retry success id=${id}: ${url}`);
+      if (getRuntimeConfig().logEnabled) this.logger.log(`[Webhook] Retry success id=${id}: ${url}`);
       await this.updateRetriveStatus(id, 'sent', res.status, responseData);
       return { success: true, http_status: res.status, response: responseData };
     } catch (err: any) {
@@ -451,7 +451,7 @@ export class WebhookService implements OnApplicationBootstrap {
         errorMessage = data;
       }
       if (err.code === 'ECONNREFUSED') {
-        this.logger.log(`[Webhook] Retry failed id=${id}: ${url} - ${err.code}`);
+        if (getRuntimeConfig().logEnabled) this.logger.log(`[Webhook] Retry failed id=${id}: ${url} - ${err.code}`);
         await this.updateRetriveStatus(id, 'failed', httpStatus, err.code);
         return { success: false, error: { code: 'RETRY_FAILED', message: err.code, http_status: httpStatus } };
       }

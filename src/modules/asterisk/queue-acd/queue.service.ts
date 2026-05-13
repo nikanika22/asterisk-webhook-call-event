@@ -6,6 +6,7 @@ import { getTimeFormat } from '../../../shared/helpers/helpers';
 import { AddMemberDto } from './dto/add-member.dto';
 import { RemoveMemberDto } from './dto/remove-member.dto';
 import { PauseAgentDto } from './dto/pause-agent.dto';
+import { getRuntimeConfig } from '../../../core/config/runtime-config';
 
 @Injectable()
 export class QueueService {
@@ -67,7 +68,7 @@ export class QueueService {
                 { action: 'command', command: `DATABASE PUT agentqueue ${agentId} SIP/${extension}` },
                 (err3: any, rq3: any) => {
                   if (err3) return reject(err3);
-                  this.logger.log(`*** ${getTimeFormat()} | Action: Login ${agentId} - Queue ${queue}`);
+                  if (getRuntimeConfig().logEnabled) this.logger.log(`*** ${getTimeFormat()} | Action: Login ${agentId} - Queue ${queue}`);
                   resolve(rq3);
                 },
               );
@@ -99,12 +100,12 @@ export class QueueService {
                 { action: 'command', command: `DATABASE DEL agentqueue ${agentId}` },
                 (err3: any, rq3: any) => {
                   if (err3) return reject(err3);
-                  this.logger.log(`*** ${getTimeFormat()} | Action: Logout ${agentId} - Queue ${queue}`);
+                  if (getRuntimeConfig().logEnabled) this.logger.log(`*** ${getTimeFormat()} | Action: Logout ${agentId} - Queue ${queue}`);
                   resolve(rq3);
                 },
               );
             } else {
-              this.logger.log(`*** ${getTimeFormat()} | Action: Logout ${agentId} - Queue ${queue}`);
+              if (getRuntimeConfig().logEnabled) this.logger.log(`*** ${getTimeFormat()} | Action: Logout ${agentId} - Queue ${queue}`);
               resolve(rq);
             }
           });
@@ -131,9 +132,11 @@ export class QueueService {
       this.ami.action(pauseAction, (err: any, rq: any) => {
         if (err) return reject(err);
         if (rq.response !== 'Success') return reject(rq);
-        this.logger.log(
-          `*** ${getTimeFormat()} | Action: Pause ${agentId} - Queue ${queue} - Reason: ${reason}`,
-        );
+        if (getRuntimeConfig().logEnabled) {
+          this.logger.log(
+            `*** ${getTimeFormat()} | Action: Pause ${agentId} - Queue ${queue} - Reason: ${reason}`,
+          );
+        }
         resolve(rq);
       });
     });
@@ -147,7 +150,7 @@ export class QueueService {
           rs[queue] = rq;
         });
       });
-      setTimeout(() => resolve(rs), 1000);
+      setTimeout(() => resolve(rs), getRuntimeConfig().setTimeoutMs);
     });
   }
 

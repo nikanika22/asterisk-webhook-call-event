@@ -3,6 +3,7 @@ import { StoreService } from '../../../shared/store/store.service';
 import { SocketService } from '../../../shared/socket/socket.service';
 import { WebhookService } from '../../webhook/webhook.service';
 import { encodeDataToClient, encodeDataToBase, getTimeFormat, getDurationTime, parseChannel } from '../../../shared/helpers/helpers';
+import { getRuntimeConfig } from '../../../core/config/runtime-config';
 
 @Injectable()
 export class CallEventService {
@@ -71,7 +72,7 @@ export class CallEventService {
     if (params.event === 'completed' || params.event === 'misscall') {
       setTimeout(() => {
         this.store.flagEvent[params.value.callrefid] = true;
-      }, 1000);
+      }, getRuntimeConfig().setTimeoutMs);
     }
 
     if (this.socketService.getIO()) {
@@ -139,7 +140,7 @@ export class CallEventService {
     if (type === 'cdr') {
       setTimeout(() => {
         this.webhookService.sendWebhook(url, params);
-      }, 500);
+      }, getRuntimeConfig().setTimeoutMs);
     } else {
       this.webhookService.sendWebhook(url, params);
     }

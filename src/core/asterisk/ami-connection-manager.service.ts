@@ -1,5 +1,6 @@
 import { Injectable, Logger, OnApplicationBootstrap } from '@nestjs/common';
 import { loadAmiConfigs, AmiConnectionConfig } from '../config/ami-config';
+import { getRuntimeConfig } from '../config/runtime-config';
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const AsteriskManager = require('asterisk-manager');
@@ -58,9 +59,9 @@ export class AmiConnectionManager implements OnApplicationBootstrap {
     ami.on('managerevent', (evt: any) => {
       const eventName = (evt.event || '').toLowerCase();
       // Chỉ in log chi tiết cho các event quan trọng (giữ nguyên logic cũ)
-      if (ALLOWED_EVENTS.has(eventName)) {
+      if (ALLOWED_EVENTS.has(eventName) && getRuntimeConfig().logEnabled) {
         this.logger.debug(`[AMI:${pbxId}] managerevent: ${eventName}`);
-        console.log(evt);
+        this.logger.debug(JSON.stringify(evt));
       }
     });
 

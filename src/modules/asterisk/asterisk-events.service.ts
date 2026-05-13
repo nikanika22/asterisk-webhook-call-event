@@ -7,6 +7,7 @@ import { SocketService } from '../../shared/socket/socket.service';
 import { CallEventService } from './call/call-event.service';
 import { WebhookService } from '../webhook/webhook.service';
 import { encodeDataToClient, getTimeFormat, parseChannel } from '../../shared/helpers/helpers';
+import { getRuntimeConfig } from '../../core/config/runtime-config';
 import {
   backupStateAsync, restoreState, classifyCall, isValidChannelForWebhook,
   buildMasterState, buildBranchState, cleanupCallState, createSyntheticCdr,
@@ -39,6 +40,14 @@ export class AsteriskEventService implements OnApplicationBootstrap {
 
   private backupStateAsync() {
     backupStateAsync(this.store, this.backFilePath, this.logger);
+  }
+
+  private logDetail(message: string) {
+    if (getRuntimeConfig().logEnabled) this.logger.log(message);
+  }
+
+  private debugDetail(message: string) {
+    if (getRuntimeConfig().logEnabled) this.logger.debug(message);
   }
 
   private attachListeners() {
@@ -132,7 +141,7 @@ export class AsteriskEventService implements OnApplicationBootstrap {
 
       if (isDestLocal) {
         this.backupStateAsync();
-        this.logger.log(`dialbegin [OUTER, master=${masterAlreadyExisted ? 'existed' : 'created'}]: ${JSON.stringify(this.store.arrDialState[linkedid], null, 2)}`);
+        this.logDetail(`dialbegin [OUTER, master=${masterAlreadyExisted ? 'existed' : 'created'}]: ${JSON.stringify(this.store.arrDialState[linkedid], null, 2)}`);
         return;
       }
 
@@ -146,7 +155,7 @@ export class AsteriskEventService implements OnApplicationBootstrap {
         this.store.arrDialState[linkedid].isMultiBranch = true;
       }
 
-      this.logger.log(`dialbegin [BRANCH CREATED]: key=${branchKey}, branch=${JSON.stringify(this.store.arrBranchState[branchKey], null, 2)}`);
+      this.logDetail(`dialbegin [BRANCH CREATED]: key=${branchKey}, branch=${JSON.stringify(this.store.arrBranchState[branchKey], null, 2)}`);
       this.backupStateAsync();
 
       if (master.webhookurl) {
@@ -167,7 +176,7 @@ export class AsteriskEventService implements OnApplicationBootstrap {
 
     if (data.dialstatus === 'ANSWER') {
       applyChannelStateUpdate(state, destchannel, data, 'answered');
-      this.logger.log(`dialend [ANSWER]: ${JSON.stringify(state, null, 2)}`);
+      this.logDetail(`dialend [ANSWER]: ${JSON.stringify(state, null, 2)}`);
       this.callEventService.makeCallEventv2('answered', linkedid);
       this.backupStateAsync();
     }
@@ -189,10 +198,10 @@ export class AsteriskEventService implements OnApplicationBootstrap {
 
       if (branchState) {
         branchState.status = lowerState;
-        this.logger.log(`dialstate [${data.dialstatus}]: key=${branchKey}, status=${lowerState}`);
+        this.logDetail(`dialstate [${data.dialstatus}]: key=${branchKey}, status=${lowerState}`);
       } else {
         applyChannelStateUpdate(state, destchannel, data, lowerState);
-        this.logger.log(`dialstate [${data.dialstatus}]: ${JSON.stringify(state, null, 2)}`);
+        this.logDetail(`dialstate [${data.dialstatus}]: ${JSON.stringify(state, null, 2)}`);
         this.backupStateAsync();
       }
     }
@@ -209,7 +218,7 @@ export class AsteriskEventService implements OnApplicationBootstrap {
     const isLocalChannel = channel.toLowerCase().startsWith('local/');
 
     if (isLocalChannel) {
-      this.logger.debug(`hangup [LOCAL channel ignored=${channel}]`);
+      this.debugDetail(`hangup [LOCAL channel ignored=${channel}]`);
       return;
     }
 
@@ -219,13 +228,13 @@ export class AsteriskEventService implements OnApplicationBootstrap {
 
       const masterOverride = buildMasterHangupOverride(state, data, wasAnswered);
 
-      this.logger.log(`hangup [MASTER, channel=${channel}]: ${JSON.stringify({ ...state, ...masterOverride }, null, 2)}`);
+      this.logDetail(`hangup [MASTER, channel=${channel}]: ${JSON.stringify({ ...state, ...masterOverride }, null, 2)}`);
       this.callEventService.makeCallEventv2('hangup', linkedid, masterOverride);
 
       setTimeout(() => {
         cleanupCallState(this.store, pbxId, data.linkedid, this.backFilePath);
         this.backupStateAsync();
-      }, 50);
+      }, getRuntimeConfig().setTimeoutMs);
     } else {
       const branchKey = buildBranchKey(pbxId, data.linkedid, channel);
       const branchState = this.store.arrBranchState[branchKey];
@@ -233,13 +242,13 @@ export class AsteriskEventService implements OnApplicationBootstrap {
       const branchOverride = resolveBranchOverride(branchState, channel, state, state.destination);
       branchOverride.status = 'hangup';
 
-      this.logger.log(`hangup [branch, channel=${channel}]: ${JSON.stringify({ ...state, ...branchOverride }, null, 2)}`);
+      this.logDetail(`hangup [branch, channel=${channel}]: ${JSON.stringify({ ...state, ...branchOverride }, null, 2)}`);
       this.callEventService.makeCallEventv2('hangup', linkedid, branchOverride);
 
       if (handleNoAnsweredCalls(state, branchState, channel, branchKey, this.store.arrCompleteCall)) {
         this.store.arrCompleteCall[branchKey] = createSyntheticCdr(channel, getTimeFormat());
         branchState.status = 'misscall';
-        this.logger.log(`hangup [EARLY CDR synthesis, misscall]: key=${branchKey}`);
+        this.logDetail(`hangup [EARLY CDR synthesis, misscall]: key=${branchKey}`);
         this.callEventService.makeCallEventv2('misscall', linkedid, branchState);
       }
     }
@@ -260,7 +269,7 @@ export class AsteriskEventService implements OnApplicationBootstrap {
     const legKey = buildBranchKey(pbxId, rawLinkedid, destchannel);
 
     if (this.store.arrCompleteCall[legKey]) {
-      this.logger.debug(`cdr [SKIP, already processed]: ${legKey}`);
+      this.debugDetail(`cdr [SKIP, already processed]: ${legKey}`);
       return;
     }
 
@@ -273,7 +282,7 @@ export class AsteriskEventService implements OnApplicationBootstrap {
     branchOverride.status = eventType;
     branchOverride.disposition = data.disposition;
 
-    this.logger.log(`cdr [${eventType}]: ${JSON.stringify({ ...state, ...branchOverride }, null, 2)}`);
+    this.logDetail(`cdr [${eventType}]: ${JSON.stringify({ ...state, ...branchOverride }, null, 2)}`);
     this.callEventService.makeCallEventv2(eventType, linkedid, branchOverride);
   }
 }

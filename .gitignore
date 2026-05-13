@@ -18,4 +18,3 @@ docs/
 /logtxtQueueandRingIngGroup/
 report-asterisk-events.md
 .codex/
-*.spec.ts
