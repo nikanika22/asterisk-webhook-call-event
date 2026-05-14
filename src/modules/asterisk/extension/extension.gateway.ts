@@ -12,6 +12,7 @@ import { StoreService } from '../../../shared/store/store.service';
 import { CallService } from '../call/call.service';
 import { encodeDataToClient, getTimeFormat } from '../../../shared/helpers/helpers';
 import { Logger } from '@nestjs/common';
+import { getRuntimeConfig } from '../../../core/config/runtime-config';
 
 @WebSocketGateway({ cors: { origin: '*' }, pingTimeout: 60000, allowEIO3: true })
 export class ExtensionGateway implements OnGatewayDisconnect {
@@ -32,7 +33,7 @@ export class ExtensionGateway implements OnGatewayDisconnect {
 
   handleDisconnect(socket: Socket) {
     if (this.store.listUserConnected[socket.id]) {
-      this.logger.log(`User disconnect - ${socket.id}`);
+      if (getRuntimeConfig().logEnabled) this.logger.log(`User disconnect - ${socket.id}`);
       delete this.store.listUserConnected[socket.id];
     }
   }
@@ -43,7 +44,7 @@ export class ExtensionGateway implements OnGatewayDisconnect {
     clientConnect.socketId = socket.id;
 
     if (clientConnect.extension) {
-      this.logger.log(`${getTimeFormat()} | Extension ${clientConnect.extension} connected`);
+      if (getRuntimeConfig().logEnabled) this.logger.log(`${getTimeFormat()} | Extension ${clientConnect.extension} connected`);
       clientConnect.channel = `Local/${clientConnect.extension}@from-queue/n`;
       setTimeout(() => {
         this.ami.action({ action: 'ExtensionState', exten: clientConnect.extension, Context: 'ext-local' }, (err: any, res: any) => {
@@ -57,7 +58,7 @@ export class ExtensionGateway implements OnGatewayDisconnect {
             this.server.emit('deviceStatus', encodeDataToClient(outputParams));
           }
         });
-      }, 1000);
+      }, getRuntimeConfig().setTimeoutMs);
     }
 
     if (clientConnect.queues) {

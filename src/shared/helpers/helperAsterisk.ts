@@ -124,16 +124,17 @@ export function buildBranchState(master: any, calleridnum: string, destchannel: 
     };
 }
 
-export function cleanupCallState(store: StoreService, linkedid: string, backFilePath: string) {
-    delete store.arrDialState[linkedid];
+export function cleanupCallState(store: StoreService, pbxId: string, linkedid: string, backFilePath: string) {
+    const namespacedLinkedid = `${pbxId}::${linkedid}`;
+    delete store.arrDialState[namespacedLinkedid];
     for (const [uid, lid] of Object.entries(store.uniqueidToLinkedid)) {
-        if (lid === linkedid) delete store.uniqueidToLinkedid[uid];
+        if (lid === namespacedLinkedid) delete store.uniqueidToLinkedid[uid];
     }
     for (const key of Object.keys(store.arrCompleteCall)) {
-        if (key.startsWith(`${linkedid}::`)) delete store.arrCompleteCall[key];
+        if (key.startsWith(`${namespacedLinkedid}::`)) delete store.arrCompleteCall[key];
     }
     for (const key of Object.keys(store.arrBranchState)) {
-        if (key.startsWith(`${linkedid}::`)) delete store.arrBranchState[key];
+        if (key.startsWith(`${namespacedLinkedid}::`)) delete store.arrBranchState[key];
     }
     // backupStateAsync(store, backFilePath);
 }
@@ -211,24 +212,30 @@ export function applyChannelStateUpdate(state: any, destchannel: string, data: a
     state.status = status;
 }
 
-export function buildMasterHangupOverride(state: any, data: any) {
+export function buildMasterHangupOverride(state: any, data: any, wasAnswered = false) {
     const isMultiBranch = !!state.isMultiBranch;
     const channel = state.channel || data.channel || '';
-    const connectedlinenum = (data.connectedlinenum && data.connectedlinenum !== '<unknown>')
+    const connectedExtension = (data.connectedlinenum && data.connectedlinenum !== '<unknown>')
         ? data.connectedlinenum
-        : state.tonumber || '';
-    let actualToNumber = state.tonumber;
+        : '';
     if (isMultiBranch) {
-        // Ưu tiên 1: Lấy từ event Hangup (connectedlinenum)
-        // Ưu tiên 2: Fallback về destchannel cuối cùng mà master đã lưu
-        actualToNumber = connectedlinenum || parseChannel(state.destchannel) || state.tonumber;
+        const answeredExtension = wasAnswered
+            ? (connectedExtension || parseChannel(state.destchannel) || state.tonumber || '')
+            : '';
+        return {
+            channel: channel,
+            destchannel: answeredExtension ? (state.destchannel || '') : '',
+            extension: answeredExtension,
+            tonumber: answeredExtension,
+            status: 'hangup',
+        };
     }
 
     return {
         channel: channel,
         destchannel: state.channel,
-        extension: isMultiBranch ? state.fromnumber : (parseChannel(state.channel) || state.fromnumber),
-        tonumber: actualToNumber,
+        extension: parseChannel(state.channel) || state.fromnumber,
+        tonumber: state.tonumber,
         status: 'hangup',
     };
 }
@@ -241,8 +248,8 @@ export function updateMasterWebhookIfMissing(state: any, webhook_select: any) {
     }
 }
 
-export function buildBranchKey(linkedid: string, channel: string): string {
-    return `${linkedid}::${channel}`;
+export function buildBranchKey(pbxId: string, linkedid: string, channel: string): string {
+    return `${pbxId}::${linkedid}::${channel}`;
 }
 
 export function buildExtensionStatusPayload(data: any) {
@@ -254,8 +261,9 @@ export function buildExtensionStatusPayload(data: any) {
     };
 }
 
-export function storeQueueCaller(store: StoreService, data: any) {
-    store.arrQueue[data.uniqueid] = { queue: data.queue, did: data.calleridnum };
+export function storeQueueCaller(store: StoreService, data: any, pbxId: string) {
+    const key = `${pbxId}::${data.uniqueid}`;
+    store.arrQueue[key] = { queue: data.queue, did: data.calleridnum };
 }
 
 export function applyAgentConnect(store: StoreService, data: any) {

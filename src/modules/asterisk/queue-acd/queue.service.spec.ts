@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { QueueService } from './queue.service';
 import { AsteriskService } from '../../../core/asterisk/asterisk.service';
 import { DATABASE_POOL } from '../../../shared/database/database.providers';
+import { resetRuntimeConfigForTest } from '../../../core/config/runtime-config';
 
 describe('QueueService', () => {
   let service: QueueService;
@@ -10,6 +11,12 @@ describe('QueueService', () => {
   let dbPoolMock: any;
 
   beforeEach(async () => {
+    process.env['RUNTIME_MAX_RETRY'] = '3';
+    process.env['RUNTIME_RETRY_DELAY_MS'] = '1000';
+    process.env['RUNTIME_SETTIMEOUT_MS'] = '2000';
+    process.env['LOG_ENABLED'] = 'true';
+    resetRuntimeConfigForTest();
+
     amiMock = {
       action: jest.fn(),
     };
@@ -41,6 +48,7 @@ describe('QueueService', () => {
 
   afterEach(() => {
     jest.clearAllMocks();
+    resetRuntimeConfigForTest();
   });
 
   it('should be defined', () => {

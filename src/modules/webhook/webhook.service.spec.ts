@@ -4,6 +4,7 @@ import { DATABASE_POOL } from '../../shared/database/database.providers';
 import { ConfigService } from '@nestjs/config';
 import { StoreService } from '../../shared/store/store.service';
 import axios from 'axios';
+import { resetRuntimeConfigForTest } from '../../core/config/runtime-config';
 
 jest.mock('axios');
 const mockedAxios = axios as jest.Mocked<typeof axios>;
@@ -15,6 +16,12 @@ describe('WebhookService', () => {
   let storeServiceMock: Partial<StoreService>;
 
   beforeEach(async () => {
+    process.env['RUNTIME_MAX_RETRY'] = '3';
+    process.env['RUNTIME_RETRY_DELAY_MS'] = '1000';
+    process.env['RUNTIME_SETTIMEOUT_MS'] = '2000';
+    process.env['LOG_ENABLED'] = 'true';
+    resetRuntimeConfigForTest();
+
     dbPoolMock = {
       query: jest.fn(),
     };
@@ -58,6 +65,7 @@ describe('WebhookService', () => {
 
   afterEach(() => {
     jest.clearAllMocks();
+    resetRuntimeConfigForTest();
   });
 
   it('should be defined', () => {

@@ -10,6 +10,7 @@ import { AsteriskService } from '../../core/asterisk/asterisk.service';
 import { StoreService } from '../../shared/store/store.service';
 import { encodeDataToClient } from '../../shared/helpers/helpers';
 import { Logger } from '@nestjs/common';
+import { getRuntimeConfig } from '../../core/config/runtime-config';
 
 @WebSocketGateway({ cors: { origin: '*' }, pingTimeout: 60000, allowEIO3: true })
 export class MonitorGateway {
@@ -30,7 +31,7 @@ export class MonitorGateway {
   private actionAMI(callInfo: any, data: any, userId: string, socket: Socket) {
     this.ami.action(callInfo, (err: any, res: any) => {
       if (res?.response === 'Error') return;
-      this.logger.log(`actionAMI: ${JSON.stringify(res)}`);
+      if (getRuntimeConfig().logEnabled) this.logger.log(`actionAMI: ${JSON.stringify(res)}`);
     });
   }
 
@@ -51,7 +52,7 @@ export class MonitorGateway {
       data: `SIP/${data.spyExten},qw`,
       priority: 1,
       async: true,
-      timeout: 30000,
+      timeout: getRuntimeConfig().setTimeoutMs,
     };
 
     this.ami.action(callInfo, (err: any, res: any) => {
@@ -74,7 +75,7 @@ export class MonitorGateway {
       data: `SIP/${data.spyExten},q`,
       priority: 1,
       async: true,
-      timeout: 30000,
+      timeout: getRuntimeConfig().setTimeoutMs,
     };
     this.ami.action(callInfo, (err: any, res: any) => {
       if (res?.response === 'Error') {
@@ -117,7 +118,7 @@ export class MonitorGateway {
           priority: 1,
           account: data.callInfo.account,
           async: true,
-          timeout: 30000,
+          timeout: getRuntimeConfig().setTimeoutMs,
         };
         this.actionAMI(callInfo, data, userId, socket);
         break;
@@ -134,7 +135,7 @@ export class MonitorGateway {
           priority: 1,
           account: data.callInfo.account,
           async: true,
-          timeout: 30000,
+          timeout: getRuntimeConfig().setTimeoutMs,
         };
         this.actionAMI(callInfo, data, userId, socket);
         break;
@@ -151,11 +152,11 @@ export class MonitorGateway {
           data: `SIP/${data.callInfo.spyExtension},qB`,
           priority: 1,
           async: true,
-          timeout: 30000,
+          timeout: getRuntimeConfig().setTimeoutMs,
         };
         this.ami.action(meetme, (err: any, res: any) => {
           if (res?.response !== 'Error') {
-            this.logger.log(`meetMeCall: ${JSON.stringify(res)}`);
+            if (getRuntimeConfig().logEnabled) this.logger.log(`meetMeCall: ${JSON.stringify(res)}`);
           }
         });
         break;
