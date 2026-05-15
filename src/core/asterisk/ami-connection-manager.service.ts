@@ -61,7 +61,7 @@ export class AmiConnectionManager implements OnApplicationBootstrap {
       // Chỉ in log chi tiết cho các event quan trọng (giữ nguyên logic cũ)
       if (ALLOWED_EVENTS.has(eventName) && getRuntimeConfig().logEnabled) {
         this.logger.debug(`[AMI:${pbxId}] managerevent: ${eventName}`);
-        this.logger.debug(JSON.stringify(evt));
+        this.logger.debug(JSON.stringify(evt, null, 2));
       }
     });
 
