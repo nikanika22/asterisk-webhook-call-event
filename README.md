@@ -37,7 +37,7 @@ DB_HOST=127.0.0.1
 DB_PORT=3306
 DB_USER=root
 DB_PASS=your_password
-DB_NAME=contact_popup_prod
+DB_NAME=your_db_name
 
 # ── Asterisk AMI (PBX thứ 1) ──────────────────────────
 AMI_HOST_01=your_pbx_ip
@@ -53,7 +53,7 @@ AMI_PASS_01=your_ami_password
 
 # ── Server ────────────────────────────────────────────
 SOCKET_PORT=3000
-CONNECTOR_SERVER=voice_server_1
+AMI_Alias_01=voice_server_1
 
 # ── Runtime ───────────────────────────────────────────
 RUNTIME_MAX_RETRY=3
@@ -95,25 +95,6 @@ npm start
 Sau khi khởi động thành công, server lắng nghe tại:
 - HTTP API: `http://localhost:3000`
 - WebSocket: `ws://localhost:3000`
-
----
-
-### Server Customer 1 (Express — cổng 3001)
-
-File `serverCustomer1.js` là server Express độc lập, dùng để nhận webhook callback từ server chính (mô phỏng hệ thống khách hàng nhận sự kiện).
-
-**Chạy trực tiếp bằng Node.js:**
-
-```bash
-node serverCustomer1.js
-```
-
-Sau khi khởi động, server hoạt động tại `http://localhost:3001`.
-
-| Endpoint | Method | Mô tả |
-|----------|--------|-------|
-| `/` | GET | Health check |
-| `/` | POST | Nhận webhook event từ server chính |
 
 ---
 
