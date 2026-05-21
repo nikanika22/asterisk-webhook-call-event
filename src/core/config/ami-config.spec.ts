@@ -9,7 +9,7 @@ describe('loadAmiConfigs', () => {
         process.env = { ...originalEnv };
         // Remove any leftover AMI keys from test env
         Object.keys(process.env)
-            .filter((k) => /^AMI_(HOST|PORT|USER|PASS)_\d+$/.test(k))
+            .filter((k) => /^AMI_(HOST|PORT|USER|PASS|ALIAS)_\d+$/.test(k) || k === 'CONNECTOR_SERVER')
             .forEach((k) => delete process.env[k]);
     });
 
@@ -32,6 +32,7 @@ describe('loadAmiConfigs', () => {
             port: 5038,
             user: 'admin',
             pass: 'secret',
+            connectorServer: '',
         });
     });
 
@@ -53,6 +54,39 @@ describe('loadAmiConfigs', () => {
         expect(pbxIds).toEqual(['01', '02']);
     });
 
+    it('should load AMI_ALIAS for each PBX config', () => {
+        process.env['AMI_HOST_01'] = '10.0.0.1';
+        process.env['AMI_PORT_01'] = '5038';
+        process.env['AMI_USER_01'] = 'admin1';
+        process.env['AMI_PASS_01'] = 'pass1';
+        process.env['AMI_ALIAS_01'] = 'voice_server_1';
+
+        process.env['AMI_HOST_02'] = '10.0.0.2';
+        process.env['AMI_PORT_02'] = '5038';
+        process.env['AMI_USER_02'] = 'admin2';
+        process.env['AMI_PASS_02'] = 'pass2';
+        process.env['AMI_ALIAS_02'] = 'voice_server_2';
+
+        const configs = loadAmiConfigs().sort((a, b) => a.pbxId.localeCompare(b.pbxId));
+
+        expect(configs).toHaveLength(2);
+        expect(configs[0].connectorServer).toBe('voice_server_1');
+        expect(configs[1].connectorServer).toBe('voice_server_2');
+    });
+
+    it('should not use legacy CONNECTOR_SERVER as fallback when AMI_ALIAS is missing', () => {
+        process.env['CONNECTOR_SERVER'] = 'legacy_voice_server';
+        process.env['AMI_HOST_01'] = '10.0.0.1';
+        process.env['AMI_PORT_01'] = '5038';
+        process.env['AMI_USER_01'] = 'admin1';
+        process.env['AMI_PASS_01'] = 'pass1';
+
+        const configs = loadAmiConfigs();
+
+        expect(configs).toHaveLength(1);
+        expect(configs[0].connectorServer).toBe('');
+    });
+
     it('should skip an entry missing AMI_PASS and still load valid ones', () => {
         process.env['AMI_HOST_01'] = '10.0.0.1';
         process.env['AMI_PORT_01'] = '5038';
@@ -68,6 +102,7 @@ describe('loadAmiConfigs', () => {
 
         expect(configs).toHaveLength(1);
         expect(configs[0].pbxId).toBe('02');
+        expect(configs[0].connectorServer).toBe('');
     });
 
     it('should throw if no valid AMI config found', () => {

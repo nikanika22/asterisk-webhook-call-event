@@ -137,7 +137,7 @@ export class CallEventService {
     delete params.value.recordingurl;
     delete params.value.timer;
 
-    if (type === 'cdr') {
+    if (type === 'completed' || type === 'misscall') {
       setTimeout(() => {
         this.webhookService.sendWebhook(url, params);
       }, getRuntimeConfig().setTimeoutMs);

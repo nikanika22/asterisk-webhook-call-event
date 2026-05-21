@@ -1,10 +1,10 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { WebhookService } from './webhook.service';
 import { DATABASE_POOL } from '../../shared/database/database.providers';
-import { ConfigService } from '@nestjs/config';
 import { StoreService } from '../../shared/store/store.service';
 import axios from 'axios';
 import { resetRuntimeConfigForTest } from '../../core/config/runtime-config';
+import { AmiConnectionManager } from '../../core/asterisk/ami-connection-manager.service';
 
 jest.mock('axios');
 const mockedAxios = axios as jest.Mocked<typeof axios>;
@@ -12,7 +12,7 @@ const mockedAxios = axios as jest.Mocked<typeof axios>;
 describe('WebhookService', () => {
   let service: WebhookService;
   let dbPoolMock: any;
-  let configServiceMock: any;
+  let amiManagerMock: any;
   let storeServiceMock: Partial<StoreService>;
 
   beforeEach(async () => {
@@ -26,13 +26,22 @@ describe('WebhookService', () => {
       query: jest.fn(),
     };
 
-    configServiceMock = {
-      get: jest.fn().mockReturnValue('mockConnectorServer'),
+    amiManagerMock = {
+      getConnectorServer: jest.fn((pbxId: string) => ({
+        '01': 'voice_server_1',
+        '02': 'voice_server_2',
+      }[pbxId] || '')),
+      getConnectorServers: jest.fn().mockReturnValue(['voice_server_1', 'voice_server_2']),
+      getConnectorServerMap: jest.fn().mockReturnValue({
+        '01': 'voice_server_1',
+        '02': 'voice_server_2',
+      }),
     };
 
     // StoreService mock phải match đúng các properties mà WebhookService dùng
     storeServiceMock = {
       arrWebhook: {},
+      arrWebhookByConnector: {},
       arrToken: {},
       arrDialState: {},
       arrQueue: {},
@@ -50,12 +59,12 @@ describe('WebhookService', () => {
           useValue: dbPoolMock,
         },
         {
-          provide: ConfigService,
-          useValue: configServiceMock,
-        },
-        {
           provide: StoreService,
           useValue: storeServiceMock,
+        },
+        {
+          provide: AmiConnectionManager,
+          useValue: amiManagerMock,
         },
       ],
     }).compile();
@@ -70,6 +79,74 @@ describe('WebhookService', () => {
 
   it('should be defined', () => {
     expect(service).toBeDefined();
+  });
+
+  it('should query active webhooks for multiple connector aliases', async () => {
+    dbPoolMock.query.mockImplementationOnce((sql: string, params: any[], cb: any) => {
+      expect(sql).toContain('g.connector_server IN (?, ?)');
+      expect(sql).toContain('g.connector_server');
+      expect(params).toEqual(['voice_server_1', 'voice_server_2']);
+      cb(null, []);
+    });
+
+    const rows = await service.getActiveWebhooks(['voice_server_1', 'voice_server_2']);
+
+    expect(rows).toEqual([]);
+  });
+
+  it('should cache webhooks separately by connector_server', async () => {
+    dbPoolMock.query.mockImplementationOnce((sql: string, params: any[], cb: any) => {
+      cb(null, [
+        {
+          id: 1,
+          connector_server: 'voice_server_1',
+          did: '',
+          config: null,
+          webhook_url: '{"callcenter":"https://server-1.test/call"}',
+          webhook_info: '{"call":["ringing"]}',
+          webhook_external: '{}',
+          webhook_type: '{"callcenter":"default"}',
+          hl_exts_queues: '101##8001',
+        },
+        {
+          id: 2,
+          connector_server: 'voice_server_2',
+          did: '',
+          config: null,
+          webhook_url: '{"callcenter":"https://server-2.test/call"}',
+          webhook_info: '{"call":["ringing"]}',
+          webhook_external: '{}',
+          webhook_type: '{"callcenter":"default"}',
+          hl_exts_queues: '101##8002',
+        },
+      ]);
+    });
+
+    await service.getWebhookInfo();
+
+    expect(storeServiceMock.arrWebhookByConnector!['voice_server_1']['webhook-1'].extensions).toContain('101');
+    expect(storeServiceMock.arrWebhookByConnector!['voice_server_2']['webhook-2'].extensions).toContain('101');
+    expect(service.getWebhookMapForPbx('01')).toHaveProperty('webhook-1');
+    expect(service.getWebhookMapForPbx('02')).toHaveProperty('webhook-2');
+  });
+
+  it('should not load webhooks when AMI aliases are absent', async () => {
+    amiManagerMock.getConnectorServers.mockReturnValueOnce([]);
+    amiManagerMock.getConnectorServerMap.mockReturnValueOnce({});
+
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        WebhookService,
+        { provide: DATABASE_POOL, useValue: dbPoolMock },
+        { provide: StoreService, useValue: storeServiceMock },
+        { provide: AmiConnectionManager, useValue: amiManagerMock },
+      ],
+    }).compile();
+    const legacyService = module.get<WebhookService>(WebhookService);
+
+    await legacyService.getWebhookInfo();
+
+    expect(dbPoolMock.query).not.toHaveBeenCalled();
   });
 
   describe('retryWebhook', () => {

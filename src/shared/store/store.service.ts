@@ -20,6 +20,7 @@ export class StoreService {
 
   // Webhook config cache (loaded from DB)
   arrWebhook: Record<string, any> = {};
+  arrWebhookByConnector: Record<string, Record<string, any>> = {};
 
   // Socket.IO connected users
   listUserConnected: Record<string, any> = {};
