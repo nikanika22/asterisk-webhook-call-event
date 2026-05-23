@@ -26,6 +26,7 @@ const ALLOWED_EVENTS = new Set([
 export class AmiConnectionManager implements OnApplicationBootstrap {
   private readonly logger = new Logger(AmiConnectionManager.name);
   private readonly connections = new Map<string, any>();
+  private readonly connectorServers = new Map<string, string>();
 
   onApplicationBootstrap() {
     const configs = loadAmiConfigs();
@@ -35,7 +36,7 @@ export class AmiConnectionManager implements OnApplicationBootstrap {
   }
 
   private initConnection(config: AmiConnectionConfig) {
-    const { pbxId, host, port, user, pass } = config;
+    const { pbxId, host, port, user, pass, connectorServer } = config;
     const ami = new AsteriskManager(port, host, user, pass, true);
 
     ami.keepConnected();
@@ -66,6 +67,9 @@ export class AmiConnectionManager implements OnApplicationBootstrap {
     });
 
     this.connections.set(pbxId, ami);
+    if (connectorServer) {
+      this.connectorServers.set(pbxId, connectorServer);
+    }
     this.logger.log(`[AMI:${pbxId}] Initialized (${host}:${port})`);
   }
 
@@ -101,5 +105,13 @@ export class AmiConnectionManager implements OnApplicationBootstrap {
    */
   getIds(): string[] {
     return [...this.connections.keys()];
+  }
+
+  getConnectorServer(pbxId: string): string {
+    return this.connectorServers.get(pbxId) || '';
+  }
+
+  getConnectorServers(): string[] {
+    return [...new Set(this.connectorServers.values())];
   }
 }

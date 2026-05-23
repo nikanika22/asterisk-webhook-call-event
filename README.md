@@ -6,11 +6,11 @@ Hệ thống tích hợp tổng đài Asterisk PBX, xây dựng bằng **NestJS*
 
 ## Yêu cầu hệ thống
 
-| Công cụ | Phiên bản tối thiểu |
-|---------|---------------------|
-| Node.js | >= 18.x |
-| npm | >= 9.x |
-| MariaDB | >= 10.4 |
+| Công cụ      | Phiên bản tối thiểu  |
+| ------------ | -------------------- |
+| Node.js      | >= 18.x              |
+| npm          | >= 9.x               |
+| MariaDB      | >= 10.4              |
 | Asterisk PBX | Đang chạy và bật AMI |
 
 ---
@@ -44,16 +44,20 @@ AMI_HOST_01=your_pbx_ip
 AMI_PORT_01=5038
 AMI_USER_01=your_ami_user
 AMI_PASS_01=your_ami_password
+AMI_ALIAS_01=voice_server_1
 
 # Hỗ trợ nhiều PBX (tùy chọn)
 # AMI_HOST_02=...
 # AMI_PORT_02=5038
 # AMI_USER_02=...
 # AMI_PASS_02=...
+# AMI_ALIAS_02=voice_server_2
+
+# AMI_ALIAS_<nn> phải khớp với giá trị groups.connector_server trong database.
+# Ví dụ PBX 01 dùng group có connector_server = voice_server_1.
 
 # ── Server ────────────────────────────────────────────
 SOCKET_PORT=3000
-AMI_Alias_01=voice_server_1
 
 # ── Runtime ───────────────────────────────────────────
 RUNTIME_MAX_RETRY=3
@@ -93,6 +97,7 @@ npm start
 ```
 
 Sau khi khởi động thành công, server lắng nghe tại:
+
 - HTTP API: `http://localhost:3000`
 - WebSocket: `ws://localhost:3000`
 
@@ -103,11 +108,13 @@ Sau khi khởi động thành công, server lắng nghe tại:
 Mở **2 terminal riêng biệt**:
 
 **Terminal 1 — Server chính:**
+
 ```bash
 npm run dev
 ```
 
 **Terminal 2 — Server Customer:**
+
 ```bash
 node serverCustomer1.js
 ```
@@ -152,36 +159,36 @@ Project_Intern/
 
 ## API Endpoints
 
-| Method | Endpoint | Mô tả |
-|--------|----------|-------|
-| GET | `/api/extensions/status` | Trạng thái máy nhánh |
-| GET | `/api/queues/status` | Thống kê hàng đợi |
-| GET | `/api/queues/extensions` | Danh sách agent trong hàng đợi |
-| GET | `/api/webhooks/logs` | Lịch sử webhook |
-| POST | `/api/calls/click2call` | Khởi tạo cuộc gọi |
-| POST | `/api/queues/members` | Thêm agent vào hàng đợi |
-| POST | `/api/blacklists` | Thêm vào danh sách chặn |
-| POST | `/api/webhooks/restart` | Tải lại cấu hình webhook |
-| POST | `/api/webhooks/retry` | Gửi lại webhook thất bại |
-| PATCH | `/api/calls/transfer` | Chuyển cuộc gọi |
-| PATCH | `/api/calls/mute` | Tắt tiếng |
-| PATCH | `/api/calls/hold` | Giữ cuộc gọi |
-| PATCH | `/api/queues/agents/pause` | Tạm dừng agent |
-| DELETE | `/api/calls/hangup` | Kết thúc cuộc gọi |
-| DELETE | `/api/queues/members` | Xóa agent khỏi hàng đợi |
-| DELETE | `/api/blacklists` | Xóa khỏi danh sách chặn |
+| Method | Endpoint                   | Mô tả                          |
+| ------ | -------------------------- | ------------------------------ |
+| GET    | `/api/extensions/status`   | Trạng thái máy nhánh           |
+| GET    | `/api/queues/status`       | Thống kê hàng đợi              |
+| GET    | `/api/queues/extensions`   | Danh sách agent trong hàng đợi |
+| GET    | `/api/webhooks/logs`       | Lịch sử webhook                |
+| POST   | `/api/calls/click2call`    | Khởi tạo cuộc gọi              |
+| POST   | `/api/queues/members`      | Thêm agent vào hàng đợi        |
+| POST   | `/api/blacklists`          | Thêm vào danh sách chặn        |
+| POST   | `/api/webhooks/restart`    | Tải lại cấu hình webhook       |
+| POST   | `/api/webhooks/retry`      | Gửi lại webhook thất bại       |
+| PATCH  | `/api/calls/transfer`      | Chuyển cuộc gọi                |
+| PATCH  | `/api/calls/mute`          | Tắt tiếng                      |
+| PATCH  | `/api/calls/hold`          | Giữ cuộc gọi                   |
+| PATCH  | `/api/queues/agents/pause` | Tạm dừng agent                 |
+| DELETE | `/api/calls/hangup`        | Kết thúc cuộc gọi              |
+| DELETE | `/api/queues/members`      | Xóa agent khỏi hàng đợi        |
+| DELETE | `/api/blacklists`          | Xóa khỏi danh sách chặn        |
 
 ---
 
 ## Scripts
 
-| Lệnh | Mô tả |
-|------|-------|
-| `npm run dev` | Chạy development với hot-reload |
-| `npm run build` | Biên dịch TypeScript sang JavaScript |
-| `npm start` | Chạy bản production (cần build trước) |
-| `npm test` | Chạy unit tests |
-| `npm run test:cov` | Chạy tests với báo cáo coverage |
+| Lệnh               | Mô tả                                 |
+| ------------------ | ------------------------------------- |
+| `npm run dev`      | Chạy development với hot-reload       |
+| `npm run build`    | Biên dịch TypeScript sang JavaScript  |
+| `npm start`        | Chạy bản production (cần build trước) |
+| `npm test`         | Chạy unit tests                       |
+| `npm run test:cov` | Chạy tests với báo cáo coverage       |
 
 ---
 
@@ -198,3 +205,7 @@ curl http://localhost:3001
 ```
 
 Hoặc mở trình duyệt tại `http://localhost:3001` — nếu thấy `Customer Server :3001 OK` thì server đang chạy bình thường.
+
+### 5. Phạm vi
+
+// Hiện tại many AMI chỉ tác động đến các event dialbegin,, dialstate, dailend, hangup, cdr

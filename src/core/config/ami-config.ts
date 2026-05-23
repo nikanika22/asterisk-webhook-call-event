@@ -6,6 +6,7 @@ export interface AmiConnectionConfig {
   port: number;
   user: string;
   pass: string;
+  connectorServer: string;
 }
 
 const logger = new Logger('AmiConfigLoader');
@@ -29,6 +30,7 @@ export function loadAmiConfigs(): AmiConnectionConfig[] {
     const portStr = process.env[`AMI_PORT_${nn}`];
     const user = process.env[`AMI_USER_${nn}`];
     const pass = process.env[`AMI_PASS_${nn}`];
+    const connectorServer = process.env[`AMI_ALIAS_${nn}`] || '';
 
     if (!host || !portStr || !user || !pass) {
       logger.warn(
@@ -43,13 +45,17 @@ export function loadAmiConfigs(): AmiConnectionConfig[] {
       continue;
     }
 
-    configs.push({ pbxId: nn, host, port, user, pass });
+    if (!connectorServer) {
+      logger.warn(`[AmiConfig] PBX ${nn}: AMI_ALIAS_${nn} not set — webhook routing disabled for this PBX.`);
+    }
+
+    configs.push({ pbxId: nn, host, port, user, pass, connectorServer });
   }
 
   if (configs.length === 0) {
     throw new Error(
       '[AmiConfig] No valid AMI connection found. ' +
-        'Define at least one set of AMI_HOST_01, AMI_PORT_01, AMI_USER_01, AMI_PASS_01 in your .env',
+      'Define at least one set of AMI_HOST_01, AMI_PORT_01, AMI_USER_01, AMI_PASS_01 in your .env',
     );
   }
 

@@ -21,9 +21,6 @@ export class EnvironmentVariables {
 
   @IsNumber()
   SOCKET_PORT!: number;
-
-  @IsString()
-  CONNECTOR_SERVER!: string;
 }
 
 export function validate(config: Record<string, unknown>) {
