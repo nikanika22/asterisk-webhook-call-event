@@ -320,7 +320,7 @@ export class AsteriskEventService implements OnApplicationBootstrap {
       this.logDetail(
         `hangup [MASTER, channel=${channel}]: ${JSON.stringify({ ...state, ...masterOverride }, null, 2)}`,
       );
-      this.callEventService.makeCallEventv2("hangup", linkedid, masterOverride);
+      // this.callEventService.makeCallEventv2("hangup", linkedid, masterOverride);
 
       setTimeout(() => {
         cleanupCallState(this.store, pbxId, data.linkedid, this.backFilePath);

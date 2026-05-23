@@ -161,9 +161,11 @@ export function buildMasterState(
         ? data.calleridnum
         : calltype === "Inbound" && data.context == "ext-queues"
           ? data.destcalleridnum
-          : data.context === "from-mientrung1"
-            ? data.destexten
-            : parseChannel(channel) ,
+          : calltype === "Inbound" && data.context === "dial-with-exten"
+            ? " "
+            : data.context === "from-mientrung1"
+              ? data.destexten
+              : parseChannel(channel),
     callrefid: linkedid,
     linkedid: linkedid,
     webhookurl: webhook_select?.webhook_url?.callcenter || "",
@@ -301,7 +303,10 @@ export function resolveBranchOverride(
         state.calltype !== "Outbound"
           ? parseChannel(channel) || state.tonumber
           : state.tonumber,
-      extension: parseChannel(channel) || " ",
+      extension:
+        state.calltype === "Outbound"
+          ? state.extension || parseChannel(state.channel) || ""
+          : parseChannel(channel) || state.extension || state.tonumber || "",
       destination:
         state.calltype !== "Outbound" ? state.destination || " " : " ",
     }
@@ -319,8 +324,17 @@ export function applyChannelStateUpdate(
     state.tonumber =
       parseChannel(destchannel) || data.destcalleridnum || state.tonumber;
   }
-  state.extension = parseChannel(destchannel) || " ";
-  state.destination = state.calltype !== "Outbound" ? state.destination : "";
+  // calltype ==outbound ưu tiên lấy từ channel, còn không fallback về channel đã lưu ở dialnbegin.
+  // calltype ==inbound, Internal ưu tiên lấy từ destchannel, còn không fallback về tonumber đã lưu ở dialnbegin.
+  state.extension =
+    state.calltype === "Outbound"
+      ? parseChannel(data.channel) ||
+        state.extension ||
+        parseChannel(state.channel) ||
+        " "
+      : destchannel.toLowerCase().startsWith("local/")
+        ? " "
+        : parseChannel(destchannel) || state.tonumber || " ";
   state.status = status;
 }
 
@@ -331,23 +345,25 @@ export function buildMasterHangupOverride(
 ) {
   const channel = state.channel || data.channel || "";
   const destchannel = state.destchannel || "";
-
+  // Master hangup của outbound phải giữ extension agent,
+  // không parse destchannel vì đó có thể là trunk/proxy.
   const extension =
-    parseChannel(destchannel) || state.extension || state.tonumber || "";
-  const connectedExtension =
-    data.connectedlinenum && data.connectedlinenum !== "<unknown>"
-      ? data.connectedlinenum
-      : "";
-
-  const finalExtension = wasAnswered
-    ? connectedExtension || extension
-    : extension;
+    state.calltype === "Outbound"
+      ? parseChannel(data.channel) ||
+        state.extension ||
+        parseChannel(state.channel) ||
+        " "
+      : destchannel.toLowerCase().startsWith("local/")
+        ? " "
+        : parseChannel(destchannel) || state.tonumber || " ";
 
   return {
     channel,
     destchannel,
-    extension: finalExtension,
-    tonumber: finalExtension || state.tonumber,
+    extension,
+    // Với outbound, tonumber là số gọi ra đã lưu từ DialBegin,
+    // không được thay bằng extension agent.
+    tonumber: state.calltype === "Outbound" ? state.tonumber : extension,
     status: "hangup",
   };
 }
