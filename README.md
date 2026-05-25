@@ -28,7 +28,7 @@ npm run dev
 ```
 
 ### 2. Cấu hình môi trường
-
+copy file .env.example thành .env
 Mở file `.env` và chỉnh sửa các biến sau:
 
 ```env
@@ -65,17 +65,6 @@ RUNTIME_RETRY_DELAY_MS=1000
 RUNTIME_SETTIMEOUT_MS=1000
 LOG_ENABLED=true
 ```
-
-### 3. Khởi tạo database
-
-Import schema vào MariaDB:
-
-```bash
-mariadb -u root -p contact_popup_prod < db_contactpopup.sql
-```
-
----
-
 ## Chạy Server
 
 ### Server chính (NestJS — cổng 3000)
@@ -100,25 +89,6 @@ Sau khi khởi động thành công, server lắng nghe tại:
 
 - HTTP API: `http://localhost:3000`
 - WebSocket: `ws://localhost:3000`
-
----
-
-### Chạy cả hai server cùng lúc
-
-Mở **2 terminal riêng biệt**:
-
-**Terminal 1 — Server chính:**
-
-```bash
-npm run dev
-```
-
-**Terminal 2 — Server Customer:**
-
-```bash
-node serverCustomer1.js
-```
-
 ---
 
 ## Cấu trúc thư mục
@@ -199,13 +169,7 @@ Sau khi khởi động cả hai server, kiểm tra bằng lệnh:
 ```bash
 # Server chính
 curl http://localhost:3000
-
-# Server Customer
-curl http://localhost:3001
 ```
-
-Hoặc mở trình duyệt tại `http://localhost:3001` — nếu thấy `Customer Server :3001 OK` thì server đang chạy bình thường.
-
 ### 5. Phạm vi
 
 // Hiện tại many AMI chỉ tác động đến các event dialbegin,, dialstate, dailend, hangup, cdr
